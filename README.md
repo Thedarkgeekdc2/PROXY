@@ -296,9 +296,8 @@ Licensed under the **MIT License** — free to use, modify, and deploy in your o
 ### 👨‍💻 Built & Maintained by
 
 **THEDARKGEEKDC · Mr DK CHAUDHARY**
-*Primary Teacher, TT In-Charge — PM SHRI Kendriya Vidyalaya No. 2, Kharagpur*
 
-📧 dcg136143@gmail.com &nbsp;·&nbsp; 💬 WhatsApp +91 81269 56997 &nbsp;·&nbsp; 🌐 [thedarkgeekdc2.github.io](https://thedarkgeekdc2.github.io)
+(https://thedarkgeekdc2.github.io)
 
 ⭐ **If this saved your school some paper and a lot of headaches, consider starring the repo!** ⭐
 
