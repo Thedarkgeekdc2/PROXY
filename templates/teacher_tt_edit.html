@@ -1,0 +1,66 @@
+{% extends 'base.html' %}
+{% block title %}Edit Timetable – {{ teacher.display_name }}{% endblock %}
+{% block content %}
+
+<div class="flex" style="justify-content:space-between;flex-wrap:wrap;gap:.5rem;margin-bottom:.9rem;">
+  <h1 style="margin:0;">
+    <i class="fa fa-calendar-pen" style="color:var(--accent)"></i>
+    {{ teacher.display_name }}
+    <span class="text-muted" style="font-size:.85rem;font-weight:400;">({{ teacher.name }})</span>
+  </h1>
+  <a href="/upload" class="btn btn-ghost btn-sm"><i class="fa fa-arrow-left"></i> Back</a>
+</div>
+
+<form method="POST" action="/teacher_timetable/{{ teacher.id }}/update">
+<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
+<table style="border-collapse:collapse;min-width:720px;width:100%;">
+  <thead>
+    <tr>
+      <th style="background:var(--navy,#0B1120);color:var(--accent);padding:.45rem .6rem;
+                 border:1px solid var(--border);font-size:.78rem;min-width:95px;">Day</th>
+      {% for pno in range(1,9) %}
+      <th style="background:rgba(79,142,247,.12);color:var(--accent);padding:.45rem .4rem;
+                 border:1px solid var(--border);font-size:.78rem;text-align:center;min-width:110px;">
+        P{{ pno }}
+      </th>
+      {% endfor %}
+    </tr>
+  </thead>
+  <tbody>
+    {% for day in days %}
+    <tr>
+      <td style="background:rgba(255,255,255,.04);border:1px solid var(--border);
+                 padding:.42rem .6rem;font-size:.82rem;font-weight:700;color:var(--accent);">
+        {{ day[:3] }}
+      </td>
+      {% for pno in range(1,9) %}
+      {% set entry = tt_map[day].get(pno) %}
+      <td style="padding:.3rem;border:1px solid var(--border);
+                 {% if entry %}background:rgba(16,185,129,.06);{% endif %}">
+        <select name="{{ day }}_{{ pno }}"
+                style="width:100%;background:rgba(255,255,255,.06);border:1px solid var(--border);
+                       color:var(--text);padding:.28rem .3rem;border-radius:6px;font-size:.72rem;">
+          <option value="">— Free —</option>
+          {% for cls in classes %}
+          <option value="{{ cls.id }}" {% if entry and entry.class_id == cls.id %}selected{% endif %}>
+            {{ cls.label }}
+          </option>
+          {% endfor %}
+        </select>
+      </td>
+      {% endfor %}
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+
+<div style="margin-top:.9rem;display:flex;gap:.6rem;">
+  <button type="submit" class="btn btn-primary">
+    <i class="fa fa-floppy-disk"></i> Save Timetable
+  </button>
+  <a href="/upload" class="btn btn-ghost">Cancel</a>
+</div>
+</form>
+
+{% endblock %}

@@ -1,0 +1,781 @@
+{% extends 'base.html' %}
+{% block title %}Proxy – KVS{% endblock %}
+{% block head %}
+<style>
+/* ── Proxy table ─────────────────────────────────── */
+.proxy-section { margin-bottom:1.1rem; }
+@media(max-width:700px){ .proxy-section{margin-bottom:.75rem;} }
+
+.proxy-table-wrap {
+  overflow-x:auto; border-radius:10px;
+  -webkit-overflow-scrolling:touch;
+}
+.proxy-table {
+  width:100%; border-collapse:collapse; min-width:920px;
+}
+.proxy-table th {
+  background:rgba(79,142,247,.12); color:var(--accent);
+  font-weight:700; font-size:.76rem; text-align:center;
+  padding:.45rem .3rem; border-bottom:2px solid rgba(79,142,247,.25);
+  border-right:1px solid var(--border); white-space:nowrap;
+}
+.proxy-table td {
+  padding:.45rem .3rem; font-size:.78rem;
+  border-bottom:1px solid var(--border);
+  border-right:1px solid var(--border);
+  vertical-align:middle;
+}
+.proxy-table td:first-child  { text-align:center; width:30px; font-weight:700; color:var(--muted); }
+.proxy-table td:nth-child(2) { min-width:135px; background:#0d1628 !important; }
+.proxy-table tr:hover td     { background:rgba(255,255,255,.018); }
+.proxy-table tr:hover td:nth-child(2) { background:#0d1628 !important; }
+
+/* Period cells */
+.period-cell { min-width:110px; text-align:center; padding:.3rem !important; }
+.period-cell select {
+  width:100%; background:rgba(255,255,255,.06);
+  border:1px solid rgba(79,142,247,.25); color:var(--text);
+  border-radius:6px; padding:.26rem .28rem;
+  font-size:.7rem; cursor:pointer; outline:none;
+}
+.period-cell select:focus     { border-color:var(--accent); }
+.period-cell select option    { background:#1a2540; }
+.period-cell select:disabled  { opacity:.2; cursor:not-allowed; }
+.period-cell.no-class         { background:rgba(255,255,255,.01) !important; }
+
+/* Class chip in period cell */
+.cls-chip {
+  display:inline-block; font-size:.58rem; font-weight:700;
+  background:rgba(79,142,247,.15); color:var(--accent);
+  border-radius:4px; padding:.05rem .3rem; margin-bottom:.18rem;
+  letter-spacing:.03em;
+}
+
+/* Free count badge on period header */
+.free-count-badge {
+  display:inline-block; background:rgba(16,185,129,.2); color:#6ee7b7;
+  border-radius:10px; font-size:.62rem; font-weight:700;
+  padding:.04rem .32rem; margin-top:.1rem; cursor:pointer;
+  border:1px solid rgba(16,185,129,.3); transition:.15s;
+}
+.free-count-badge:hover   { background:rgba(16,185,129,.38); }
+.free-count-badge.zero    { background:rgba(239,68,68,.2); color:#fca5a5; border-color:rgba(239,68,68,.3); }
+.free-count-badge.loading { background:rgba(255,255,255,.06); color:var(--muted); }
+
+/* Status cells */
+.cell-confirmed {
+  background:rgba(16,185,129,.08); border:1px solid rgba(16,185,129,.25);
+  border-radius:6px; padding:.24rem .32rem; font-size:.68rem;
+  color:#6ee7b7; font-weight:600; display:flex;
+  align-items:center; gap:.22rem; justify-content:center; white-space:nowrap;
+}
+.cell-noproxy { font-size:.67rem; color:var(--red); text-align:center; }
+
+/* Absent teacher cell */
+.abs-teacher-cell { padding:.48rem .52rem !important; }
+.abs-name   { font-weight:700; font-size:.82rem; }
+.abs-code   { font-size:.68rem; color:var(--muted); }
+.abs-reason { font-size:.66rem; color:var(--muted); font-style:italic; margin-top:.1rem; }
+.abs-partial {
+  font-size:.63rem; background:rgba(245,158,11,.15); color:#fcd34d;
+  border-radius:4px; padding:.04rem .28rem; margin-top:.18rem; display:inline-block;
+}
+.mode-badge {
+  font-size:.58rem; font-weight:700; padding:.05rem .3rem; border-radius:4px;
+  letter-spacing:.03em;
+}
+.mode-badge.mode-auto   { background:rgba(79,142,247,.18); color:#93c5fd; }
+.mode-badge.mode-manual { background:rgba(245,158,11,.2);  color:#fcd34d; }
+.action-cell { text-align:center !important; min-width:80px; }
+
+/* ── Teacher load grid ─────────────────────────────── */
+.load-grid {
+  display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:.45rem;
+}
+@media(max-width:700px){
+  .load-grid { grid-template-columns:repeat(auto-fill,minmax(115px,1fr)); gap:.32rem; }
+  .load-card { padding:.5rem .55rem; }
+  .lc-name   { font-size:.76rem; }
+}
+.load-card {
+  background:var(--card); border:1px solid var(--border);
+  border-radius:10px; padding:.58rem .68rem; transition:.15s;
+}
+.load-card.has-proxy { border-color:rgba(16,185,129,.35); background:rgba(16,185,129,.04); }
+.lc-name  { font-size:.8rem; font-weight:700; }
+.lc-code  { font-size:.66rem; color:var(--muted); margin-bottom:.3rem; }
+.load-counts { display:flex; gap:.26rem; flex-wrap:wrap; margin-bottom:.24rem; }
+.lc-pill  { font-size:.63rem; padding:.08rem .32rem; border-radius:10px; font-weight:700; }
+.lc-d  { background:rgba(16,185,129,.18);  color:#6ee7b7; }
+.lc-w  { background:rgba(79,142,247,.18);  color:#93c5fd; }
+.lc-m  { background:rgba(245,158,11,.18);  color:#fcd34d; }
+.lc-t  { background:rgba(255,255,255,.09); color:var(--muted); }
+.lc-free {
+  background:rgba(124,58,237,.18); color:#c4b5fd; cursor:pointer;
+}
+.lc-free:hover { background:rgba(124,58,237,.38); }
+
+/* ── Mark bar ──────────────────────────────────────── */
+.mark-bar {
+  background:var(--card); border:1px solid var(--border);
+  border-radius:12px; padding:.78rem 1rem; margin-bottom:1rem;
+}
+.mark-bar-row {
+  display:flex; gap:.52rem; flex-wrap:wrap; align-items:flex-end;
+}
+.mark-bar .form-group { margin:0; flex:1; min-width:112px; }
+
+/* Partial period selector */
+.partial-row {
+  display:none; flex-wrap:wrap; gap:.28rem; align-items:center;
+  margin-top:.52rem; padding-top:.52rem;
+  border-top:1px solid rgba(255,255,255,.06);
+}
+.partial-row.show { display:flex; }
+.period-chk {
+  display:inline-flex; align-items:center; gap:.2rem;
+  background:rgba(255,255,255,.05); border:1px solid var(--border);
+  border-radius:6px; padding:.23rem .48rem; cursor:pointer;
+  font-size:.74rem; user-select:none;
+}
+.period-chk input { accent-color:var(--accent); cursor:pointer; }
+.period-chk:has(input:checked) {
+  background:rgba(79,142,247,.18); border-color:var(--accent); color:var(--accent);
+}
+.partial-label { font-size:.74rem; color:var(--warn); font-weight:700; white-space:nowrap; }
+
+/* ── Modals ────────────────────────────────────────── */
+.kvs-modal {
+  display:none; position:fixed; inset:0; background:rgba(0,0,0,.65);
+  z-index:9999; align-items:center; justify-content:center;
+}
+.kvs-modal.open { display:flex; }
+.kvs-modal-box {
+  background:#0d1628; border-radius:14px;
+  padding:1.1rem 1.3rem; width:90%; max-height:82vh; overflow-y:auto;
+  box-shadow:0 8px 40px rgba(0,0,0,.7);
+}
+</style>
+{% endblock %}
+
+{% block content %}
+
+<h1><i class="fa fa-arrows-rotate" style="color:var(--accent)"></i> Manage PROXY</h1>
+
+{# ── Hidden cancel forms ─────────────────────────────── #}
+{% for row in absent_rows %}
+<form id="cancel-form-{{ row.absence.id }}"
+      method="POST"
+      action="/proxy/cancel_absence/{{ row.absence.id }}"
+      style="display:none;"></form>
+{% endfor %}
+
+{# ── Collect absent teacher IDs (filter from mark-absent dropdown) ─────── #}
+{% set absent_ids = [] %}
+{% for row in absent_rows %}{% if absent_ids.append(row.teacher.id) %}{% endif %}{% endfor %}
+
+{# ─────────────────── MARK ABSENT BAR ──────────────────────────────────── #}
+<form method="POST" action="/proxy" id="mark-form">
+<div class="mark-bar">
+  <div class="mark-bar-row">
+    <div class="form-group">
+      <label><i class="fa fa-user-slash" style="color:var(--red)"></i> Mark Teacher Absent</label>
+      <select name="teacher_id" required>
+        <option value="">— Select Teacher —</option>
+        {% for t in teachers %}
+          {% if t.id not in absent_ids %}
+          <option value="{{ t.id }}">{{ t.display_name }} ({{ t.name }})</option>
+          {% endif %}
+        {% endfor %}
+      </select>
+    </div>
+    <div class="form-group" style="flex:0;min-width:125px;">
+      <label>Date</label>
+      <input type="date" name="absent_date" value="{{ date_str }}"/>
+    </div>
+    <div class="form-group" style="flex:1.4;">
+      <label>Reason (optional)</label>
+      <input type="text" name="reason" placeholder="Sick leave / Training…"/>
+    </div>
+    <div class="form-group" style="flex:0;white-space:nowrap;">
+      <label style="font-size:.72rem;color:var(--muted);">Proxy Mode</label>
+      <div style="display:flex;gap:.4rem;padding-top:.28rem;">
+        <label class="period-chk" style="font-size:.76rem;" title="Ranked suggestions, scored, top picks shown">
+          <input type="radio" name="proxy_mode" value="auto" checked/> Auto
+        </label>
+        <label class="period-chk" style="font-size:.76rem;" title="Free pick — every eligible teacher shown, no score, no ranking">
+          <input type="radio" name="proxy_mode" value="manual"/> Manual
+        </label>
+      </div>
+    </div>
+    <div class="form-group" style="flex:0;white-space:nowrap;">
+      <label style="font-size:.72rem;color:var(--muted);">Partial Day?</label>
+      <div style="padding-top:.28rem;">
+        <label class="period-chk" style="font-size:.76rem;">
+          <input type="checkbox" id="partial-toggle" onchange="togglePartial(this)"/>
+          Select Periods
+        </label>
+      </div>
+    </div>
+    <button class="btn btn-primary" type="submit" style="align-self:flex-end;flex-shrink:0;">
+      <i class="fa fa-user-minus"></i> Mark Absent
+    </button>
+    <div style="align-self:flex-end;flex-shrink:0;">
+      <label style="display:block;font-size:.7rem;color:var(--muted);margin-bottom:.24rem;">View Date</label>
+      <input type="date" value="{{ date_str }}" style="width:auto;"
+             onchange="location.href='/proxy?date='+this.value"/>
+    </div>
+  </div>
+
+  {# Partial period checkboxes #}
+  <div class="partial-row" id="partial-row">
+    <span class="partial-label"><i class="fa fa-clock"></i> Periods needing proxy:</span>
+    {% for pn in range(1,9) %}
+    <label class="period-chk">
+      <input type="checkbox" class="pchk" value="{{ pn }}" checked/> P{{ pn }}
+    </label>
+    {% endfor %}
+    <input type="hidden" name="partial_periods" id="partial-periods-val" value=""/>
+    <span style="font-size:.68rem;color:var(--muted);">(uncheck periods teacher is present)</span>
+  </div>
+</div>
+</form>
+
+{# ─────────────────── CLASS MERGE BAR ──────────────────────────────────── #}
+<div class="card" style="padding:.7rem 1rem;margin-bottom:.8rem;
+     background:rgba(124,58,237,.05);border-color:rgba(124,58,237,.22);">
+  <div style="display:flex;align-items:center;gap:.8rem;flex-wrap:wrap;margin-bottom:{% if day_merges %}.6rem{% else %}0{% endif %};">
+    <span style="font-size:.82rem;font-weight:700;color:#c4b5fd;">
+      <i class="fa fa-object-group"></i> Class Merges Today
+    </span>
+    <a href="/merge?date={{ date_str }}" class="btn btn-sm"
+       style="background:rgba(124,58,237,.22);color:#c4b5fd;
+              border:1px solid rgba(124,58,237,.38);margin-left:auto;">
+      <i class="fa fa-plus"></i> Manage
+    </a>
+  </div>
+  {% if day_merges %}
+    {% for m in day_merges %}
+    <div style="margin-bottom:{% if not loop.last %}.6rem{% else %}0{% endif %};padding:.5rem .65rem;
+         background:rgba(124,58,237,.07);border:1px solid rgba(124,58,237,.18);border-radius:9px;">
+      <div style="font-size:.8rem;font-weight:700;margin-bottom:.38rem;">
+        <span style="color:#fca5a5;">{{ m.going_class.label }}</span>
+        <span style="color:#a78bfa;"> → </span>
+        <span style="color:#6ee7b7;">{{ m.host_class.label }}</span>
+        <span style="font-size:.66rem;color:var(--muted);font-weight:400;margin-left:.3rem;">
+          freed teachers available for proxy
+        </span>
+      </div>
+      {# P1-P8 freed teacher table — loaded via JS #}
+      <div class="proxy-merge-freed"
+           data-going-id="{{ m.going_class_id }}"
+           style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
+        <span style="font-size:.7rem;color:var(--muted);font-style:italic;">Loading…</span>
+      </div>
+    </div>
+    {% endfor %}
+  {% else %}
+    <p style="font-size:.76rem;color:var(--muted);margin:0;">
+      No merges today.
+      <a href="/merge?date={{ date_str }}" style="color:#c4b5fd;">Add a merge</a>
+      to free up teachers for proxy.
+    </p>
+  {% endif %}
+</div>
+
+{# ─────────────────── PROXY ASSIGNMENT TABLE ───────────────────────────── #}
+<div class="card" style="padding:.72rem;">
+  <div class="flex" style="margin-bottom:.6rem;justify-content:space-between;flex-wrap:wrap;gap:.3rem;">
+    <h2 style="margin:0;">
+      <i class="fa fa-table-cells" style="color:var(--accent)"></i>
+      Proxy — {{ date_obj.strftime('%A, %d %b %Y') }}
+    </h2>
+    <div class="flex" style="font-size:.68rem;color:var(--muted);gap:.6rem;flex-wrap:wrap;">
+      <span style="color:var(--accent);">Chip = class</span>
+      <span style="color:#6ee7b7;">■ Confirmed</span>
+      <span style="color:#c4b5fd;">[M x] = Merge-freed periods left today (x → 0 as used, not counted in arrangement reports)</span>
+      <span>— = No class</span>
+      <span style="color:var(--muted);">F: = free periods · Rem: = proxy slots left</span>
+      <span style="color:var(--muted);">Badge# = free teachers in period (click)</span>
+    </div>
+  </div>
+
+  {% if absent_rows %}
+  {# ── Period free count bar (shown once, above all proxy tables) ── #}
+  <div style="overflow-x:auto;margin-bottom:.6rem;">
+    <table style="border-collapse:collapse;min-width:700px;width:100%;">
+      <thead>
+        <tr>
+          <td style="width:165px;font-size:.72rem;font-weight:700;
+                     color:var(--muted);padding:.25rem .4rem;white-space:nowrap;">
+            Free teachers per period:
+          </td>
+          {% for pnum in range(1,9) %}
+          <td style="text-align:center;padding:.25rem .3rem;min-width:80px;">
+            <span style="font-size:.74rem;font-weight:700;color:var(--accent);">P{{ pnum }}</span><br>
+            <span class="free-count-badge loading"
+                  id="fcb-{{ pnum }}"
+                  onclick="showFreePeriod({{ pnum }})"
+                  title="Click to see free teachers in P{{ pnum }}">…</span>
+          </td>
+          {% endfor %}
+        </tr>
+      </thead>
+    </table>
+  </div>
+
+    {% for row in absent_rows %}
+    <div class="proxy-section">
+    <form method="POST" action="/proxy/confirm_all">
+      <input type="hidden" name="absent_date"         value="{{ date_str }}"/>
+      <input type="hidden" name="original_teacher_id" value="{{ row.teacher.id }}"/>
+      <div class="proxy-table-wrap">
+      <table class="proxy-table">
+        <thead>
+          <tr>
+            <th>Sr</th>
+            <th style="text-align:left;">Absent Teacher</th>
+            <th>P1</th><th>P2</th><th>P3</th><th>P4</th>
+            <th>P5</th><th>P6</th><th>P7</th><th>P8</th>
+            <th>✔</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>{{ loop.index }}</td>
+
+            {# Absent teacher info #}
+            <td class="abs-teacher-cell">
+              <div class="flex" style="gap:.3rem;align-items:center;">
+                <div class="abs-name">{{ row.teacher.display_name }}</div>
+                {% if row.proxy_mode == 'manual' %}
+                  <span class="mode-badge mode-manual" title="Free pick — no score, every eligible teacher shown">MANUAL</span>
+                {% else %}
+                  <span class="mode-badge mode-auto" title="Ranked suggestions, best picks first">AUTO</span>
+                {% endif %}
+              </div>
+              <div class="abs-code">{{ row.teacher.name }}</div>
+              {% if row.partial_periods %}
+                <div class="abs-partial">
+                  ⏱ P{{ row.partial_periods | sort | join(', P') }}
+                </div>
+              {% endif %}
+              {% if row.display_reason %}
+                <div class="abs-reason">{{ row.display_reason }}</div>
+              {% endif %}
+              <button type="button" class="btn btn-sm btn-red"
+                      style="margin-top:.26rem;padding:.1rem .32rem;font-size:.62rem;"
+                      onclick="if(confirm('Cancel absence?'))
+                               document.getElementById('cancel-form-{{ row.absence.id }}').submit()">
+                <i class="fa fa-xmark"></i> Remove
+              </button>
+            </td>
+
+            {# P1 – P8 #}
+            {% for pnum in range(1, 9) %}
+            {% set item = row.by_period[pnum] %}
+            <td class="period-cell {% if not item %}no-class{% endif %}">
+
+              {% if not item %}
+                <select disabled><option>—</option></select>
+
+              {% elif item.existing and item.existing.status == 'confirmed' %}
+                <div class="cls-chip">{{ item.tt.class_.label }}</div>
+                <div class="cell-confirmed">
+                  <i class="fa fa-check" style="font-size:.6rem;"></i>
+                  {{ item.existing.proxy_teacher.display_name if item.existing.proxy_teacher else '?' }}
+                </div>
+
+              {% elif item.suggestions %}
+                <div class="cls-chip">{{ item.tt.class_.label }}</div>
+                <select name="slot_{{ pnum }}_{{ item.tt.class_id }}"
+                        title="Class {{ item.tt.class_.label }}"
+                        data-absent="{{ row.teacher.id }}"
+                        data-pnum="{{ pnum }}"
+                        data-cid="{{ item.tt.class_id }}"
+                        data-mode="{{ row.proxy_mode }}"
+                        onchange="onProxySelect(this)">
+                  {% for s in item.suggestions %}
+                  <option value="{{ s.teacher.id }}"
+                          data-score="{{ s.score }}"
+                          data-reasons="{{ s.reasons | join(' | ') }}"
+                          data-tid="{{ s.teacher.id }}"
+                          data-today-done="{{ s.today_done | default(0) }}"
+                          data-eff-max="{{ s.eff_max | default(2) }}"
+                          data-remaining="{{ s.remaining | default(1) }}"
+                          data-base-score="{{ s.score }}"
+                          data-free="{{ s.free_periods }}"
+                          data-merge="{{ '1' if s.freed_by_merge else '0' }}"
+                          data-merge-remaining="{{ s.merge_remaining | default(0) }}"
+                          data-merge-periods="{{ s.merge_periods | default([]) | join(',') }}"
+                          data-name="{{ s.teacher.display_name }}"
+                          {% if loop.first %}selected{% endif %}>
+                    {%- set mtag = ('[M ' ~ s.merge_remaining ~ '] ') if (s.freed_by_merge and s.merge_remaining > 0) else ('[M0] ' if s.freed_by_merge else '') -%}
+                    {%- if row.proxy_mode == 'auto' -%}
+                      {{ mtag }}{{ s.teacher.display_name }} ({{ s.score }}) F:{{ s.free_periods }} Rem:{{ s.remaining | default(1) }}
+                    {%- else -%}
+                      {{ mtag }}{{ s.teacher.display_name }} F:{{ s.free_periods }} Rem:{{ s.remaining | default(1) }}
+                    {%- endif -%}
+                  </option>
+                  {% endfor %}
+                </select>
+                <input type="hidden"
+                       name="score_{{ pnum }}_{{ item.tt.class_id }}"
+                       id="sc_{{ row.teacher.id }}_{{ pnum }}_{{ item.tt.class_id }}"
+                       value="{{ item.suggestions[0].score if item.suggestions else 0 }}"/>
+                <input type="hidden"
+                       name="reasons_{{ pnum }}_{{ item.tt.class_id }}"
+                       id="rs_{{ row.teacher.id }}_{{ pnum }}_{{ item.tt.class_id }}"
+                       value="{{ item.suggestions[0].reasons | join(' | ') if item.suggestions else '' }}"/>
+
+              {% else %}
+                <div class="cls-chip">{{ item.tt.class_.label }}</div>
+                <div class="cell-noproxy">No proxy</div>
+
+              {% endif %}
+
+            </td>
+            {% endfor %}
+
+            <td class="action-cell">
+              <button type="submit" class="btn btn-green btn-sm">
+                <i class="fa fa-check-double"></i><br>Save
+              </button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      </div>
+    </form>
+    </div>
+    {% endfor %}
+
+  {% else %}
+    <div style="text-align:center;padding:2rem 1rem;color:var(--muted);">
+      <i class="fa fa-calendar-check" style="font-size:1.8rem;opacity:.35;"></i>
+      <p style="margin-top:.48rem;font-size:.82rem;">No absences for {{ date_obj.strftime('%d %b %Y') }}.</p>
+      <p style="font-size:.74rem;">Use the form above to mark a teacher absent.</p>
+    </div>
+  {% endif %}
+</div>
+
+{# ─────────────────── TEACHER LOAD PANEL ──────────────────────────────── #}
+<div class="card" style="margin-top:.9rem;">
+  <div class="flex" style="margin-bottom:.72rem;justify-content:space-between;flex-wrap:wrap;gap:.3rem;">
+    <h2 style="margin:0;">
+      <i class="fa fa-chalkboard-user" style="color:var(--warn)"></i>
+      All Teachers – Proxy Load
+    </h2>
+    <div class="flex" style="gap:.3rem;font-size:.62rem;">
+      <span class="lc-pill lc-d">Today</span>
+      <span class="lc-pill lc-w">Week</span>
+      <span class="lc-pill lc-m">Month</span>
+      <span class="lc-pill lc-t">Total</span>
+      <span class="lc-pill lc-free" style="cursor:default;">Free (click)</span>
+    </div>
+  </div>
+
+  <div class="load-grid">
+    {% for row in teacher_loads %}
+    <div class="load-card {% if row.today > 0 %}has-proxy{% endif %}">
+      <div class="lc-name">{{ row.teacher.display_name }}</div>
+      <div class="lc-code">{{ row.teacher.name }}</div>
+      <div class="load-counts">
+        <span class="lc-pill lc-d" title="Proxy done today">{{ row.today }}</span>
+        <span class="lc-pill lc-w" title="This week (Mon–Sat)">{{ row.weekly }}</span>
+        <span class="lc-pill lc-m" title="This month">{{ row.monthly }}</span>
+        <span class="lc-pill lc-t" title="All-time total">{{ row.total }}</span>
+        <span class="lc-pill lc-free"
+              title="Click: see today's period breakdown"
+              onclick="showTeacherPeriods({{ row.teacher.id }}, '{{ row.teacher.display_name }}')">
+          {{ row.free_today }}</span>
+      </div>
+      <div style="font-size:.62rem;color:var(--muted);margin-top:.2rem;">
+        Rem:
+        <strong style="color:{% if row.remaining > 0 %}#6ee7b7{% else %}#fca5a5{% endif %};">
+          {{ row.remaining }}</strong> / {{ row.eff_max }}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+{# ─────────────────── MODALS (only once, in body) ─────────────────────── #}
+
+{# Modal: teacher period breakdown (click free count) #}
+<div class="kvs-modal" id="fp-modal">
+  <div class="kvs-modal-box" style="border:1px solid rgba(79,142,247,.3);max-width:440px;">
+    <div class="flex" style="justify-content:space-between;margin-bottom:.7rem;">
+      <h2 id="fp-modal-title" style="margin:0;font-size:.95rem;color:var(--text);">Periods</h2>
+      <button onclick="closeModal('fp-modal')"
+              style="background:none;border:none;color:var(--muted);font-size:1.1rem;cursor:pointer;">✕</button>
+    </div>
+    <div id="fp-modal-body"></div>
+  </div>
+</div>
+
+{# Modal: free teachers list for a period (click badge in header) #}
+<div class="kvs-modal" id="pf-modal">
+  <div class="kvs-modal-box" style="border:1px solid rgba(16,185,129,.3);max-width:480px;">
+    <div class="flex" style="justify-content:space-between;margin-bottom:.7rem;">
+      <h2 id="pf-modal-title" style="margin:0;font-size:.95rem;color:#6ee7b7;"></h2>
+      <button onclick="closeModal('pf-modal')"
+              style="background:none;border:none;color:var(--muted);font-size:1.1rem;cursor:pointer;">✕</button>
+    </div>
+    <div id="pf-modal-body"></div>
+  </div>
+</div>
+
+{# ─────────────────── SCRIPTS ──────────────────────────────────────────── #}
+<script>
+const DATE_FOR_API = '{{ date_str }}';
+
+// ── Modal helpers ─────────────────────────────────────────────────────────
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
+}
+function openModal(id) {
+  document.getElementById(id).classList.add('open');
+}
+// Close on outside click
+document.querySelectorAll('.kvs-modal').forEach(m => {
+  m.addEventListener('click', e => { if (e.target === m) m.classList.remove('open'); });
+});
+
+// ── Partial day ───────────────────────────────────────────────────────────
+function togglePartial(cb){
+  document.getElementById('partial-row').classList.toggle('show', cb.checked);
+  if(!cb.checked) document.getElementById('partial-periods-val').value = '';
+  else syncPartialVal();
+}
+function syncPartialVal(){
+  const checked = [...document.querySelectorAll('.pchk:checked')].map(c=>c.value);
+  document.getElementById('partial-periods-val').value = checked.join(',');
+}
+document.querySelectorAll('.pchk').forEach(c => c.addEventListener('change', syncPartialVal));
+document.getElementById('mark-form').addEventListener('submit', function(){
+  if(document.getElementById('partial-toggle').checked) syncPartialVal();
+});
+
+// ── S5: Unsaved warning ───────────────────────────────────────────────────
+let hasUnsaved = false;
+window.addEventListener('beforeunload', e => {
+  if(hasUnsaved){ e.preventDefault(); e.returnValue='Unsaved proxy selections will be lost.'; }
+});
+document.querySelectorAll('form[action="/proxy/confirm_all"]').forEach(f => {
+  f.addEventListener('submit', () => { hasUnsaved = false; });
+});
+
+// ── Real-time health: teacher names are set server-side via data-name ──────
+// (no fragile text-parsing needed — data-name is authoritative)
+
+// ── Real-time health: cross-period dropdown sync ───────────────────────────
+const pendingSel = {};   // pendingSel[absTid][proxyTid] = [slot, slot, ...]
+
+function onProxySelect(sel) {
+  const form   = sel.closest('form');
+  if (!form) return;
+  const absTid = parseInt(form.querySelector('[name=original_teacher_id]').value);
+  const pnum   = sel.dataset.pnum;
+  const cid    = sel.dataset.cid;
+
+  // Update hidden score/reason
+  const opt    = sel.options[sel.selectedIndex];
+  const scEl   = document.getElementById('sc_' + absTid + '_' + pnum + '_' + cid);
+  const rsEl   = document.getElementById('rs_' + absTid + '_' + pnum + '_' + cid);
+  if (scEl) scEl.value = opt ? (opt.dataset.score   || 0)  : 0;
+  if (rsEl) rsEl.value = opt ? (opt.dataset.reasons || '') : '';
+
+  // Track pending
+  if (!pendingSel[absTid]) pendingSel[absTid] = {};
+  // Clear old slot
+  for (const [tid, slots] of Object.entries(pendingSel[absTid])) {
+    pendingSel[absTid][tid] = slots.filter(s => s !== pnum + '_' + cid);
+    if (!pendingSel[absTid][tid].length) delete pendingSel[absTid][tid];
+  }
+  // Set new
+  const newTid = parseInt(sel.value);
+  if (newTid) {
+    if (!pendingSel[absTid][newTid]) pendingSel[absTid][newTid] = [];
+    pendingSel[absTid][newTid].push(pnum + '_' + cid);
+  }
+
+  reRenderRow(absTid);
+  hasUnsaved = true;
+}
+
+function reRenderRow(absTid) {
+  const pendCount = {};
+  for (const [tid, slots] of Object.entries(pendingSel[absTid] || {}))
+    pendCount[parseInt(tid)] = slots.length;
+
+  document.querySelectorAll(`select[data-absent="${absTid}"]`).forEach(sel => {
+    const curVal = parseInt(sel.value) || 0;
+    const mode   = sel.dataset.mode || 'auto';
+    Array.from(sel.options).forEach(opt => {
+      if (!opt.value) return;
+      const tid       = parseInt(opt.value);
+      const todayDone = parseInt(opt.dataset.todayDone || 0);
+      const effMax    = parseInt(opt.dataset.effMax    || 2);
+      const freeP     = parseInt(opt.dataset.free   || 0);
+      const isMerge   = opt.dataset.merge === '1';
+      const baseScore = parseFloat(opt.dataset.baseScore || opt.dataset.score || 0);
+      const pend      = pendCount[tid] || 0;
+      const total     = todayDone + pend;
+      const atLimit   = total >= effMax;
+      const rem       = Math.max(0, effMax - total);
+      opt.disabled    = atLimit && tid !== curVal;
+      const limitPfx  = (atLimit && tid !== curVal) ? '⛔ ' : '';
+      const name      = opt.dataset.name || 'Teacher';
+
+      // [M x] tag — merge-freed periods still unused today for this
+      // teacher. Live-decrements as pending picks (in this same absent
+      // row) land on one of their own merge-freed period numbers.
+      let mPfx = '';
+      if (isMerge) {
+        const baseMergeRem = parseInt(opt.dataset.mergeRemaining || 0);
+        const mergePeriods = (opt.dataset.mergePeriods || '')
+          .split(',').filter(Boolean);
+        const slots = pendingSel[absTid] && pendingSel[absTid][tid]
+          ? pendingSel[absTid][tid] : [];
+        const mergePendUsed = slots.filter(
+          s => mergePeriods.includes(s.split('_')[0])
+        ).length;
+        const liveMergeRem = Math.max(0, baseMergeRem - mergePendUsed);
+        mPfx = liveMergeRem > 0 ? `[M ${liveMergeRem}] ` : '[M0] ';
+      }
+
+      if (mode === 'auto') {
+        // Auto mode: show live-adjusted score (base score minus pending-selection penalty)
+        const adjScore = Math.round(baseScore - pend * 8);
+        opt.text = `${limitPfx}${mPfx}${name} (${adjScore}) F:${freeP} Rem:${rem}`;
+      } else {
+        // Manual mode: free hand — no score shown, ever
+        opt.text = `${limitPfx}${mPfx}${name} F:${freeP} Rem:${rem}`;
+      }
+    });
+  });
+}
+
+// ── Improvement 2: Period free count badges ──────────────────────────────
+let periodFreeData = {};
+
+async function loadFreeCountBadges() {
+  try {
+    const res  = await fetch(`/api/period_free_counts?date=${DATE_FOR_API}`);
+    periodFreeData = await res.json();
+    for (let p = 1; p <= 8; p++) {
+      // Update ALL badges with this period number
+      document.querySelectorAll(`#fcb-${p}`).forEach(badge => {
+        const cnt = (periodFreeData[p] || {}).count || 0;
+        badge.textContent = cnt;
+        badge.className   = 'free-count-badge' + (cnt === 0 ? ' zero' : '');
+      });
+    }
+  } catch(e) {
+    document.querySelectorAll('.free-count-badge').forEach(b => {
+      b.textContent = '?'; b.className = 'free-count-badge';
+    });
+  }
+}
+
+function showFreePeriod(pnum) {
+  const data  = periodFreeData[pnum] || {};
+  const names = data.names || [];
+  document.getElementById('pf-modal-title').textContent = `P${pnum} — Free Teachers (${names.length})`;
+  document.getElementById('pf-modal-body').innerHTML = names.length
+    ? names.map(n =>
+        `<div style="padding:.3rem .48rem;border-bottom:1px solid var(--border);
+              font-size:.84rem;font-weight:600;color:#6ee7b7;">${n}</div>`
+      ).join('')
+    : '<p style="color:var(--muted);font-size:.83rem;">No free teachers in this period.</p>';
+  openModal('pf-modal');
+}
+
+// ── Improvement 4: Teacher period breakdown on free count click ───────────
+async function showTeacherPeriods(teacherId, teacherName) {
+  document.getElementById('fp-modal-title').textContent = teacherName + ' — Today';
+  document.getElementById('fp-modal-body').innerHTML =
+    '<p style="color:var(--muted);font-size:.8rem;">Loading…</p>';
+  openModal('fp-modal');
+
+  try {
+    const res  = await fetch(`/api/teacher_free_periods?teacher_id=${teacherId}&date=${DATE_FOR_API}`);
+    const data = await res.json();
+
+    const TYPES = {
+      free:        { bg:'rgba(16,185,129,.12)',  c:'#6ee7b7', lbl:'Free'       },
+      proxy:       { bg:'rgba(79,142,247,.12)',  c:'#93c5fd', lbl:'Proxy'      },
+      own_class:   { bg:'rgba(239,68,68,.1)',    c:'#fca5a5', lbl:'Own class'  },
+      merge_freed: { bg:'rgba(124,58,237,.12)', c:'#c4b5fd', lbl:'[M] Freed'  },
+    };
+
+    const all = [
+      ...(data.free_periods  || []),
+      ...(data.busy_periods  || []),
+      ...(data.freed_periods || []),
+    ].sort((a,b) => a.period - b.period);
+
+    document.getElementById('fp-modal-body').innerHTML =
+      `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:.38rem;margin-bottom:.55rem;">
+        ${all.map(p => {
+          const t = TYPES[p.type] || TYPES.free;
+          const cls = p.class ? ` · ${p.class}` : '';
+          return `<div style="background:${t.bg};border-radius:8px;padding:.42rem .45rem;text-align:center;">
+            <div style="font-size:.76rem;font-weight:700;color:${t.c};">P${p.period}</div>
+            <div style="font-size:.65rem;color:${t.c};opacity:.88;">${t.lbl}${cls}</div>
+          </div>`;
+        }).join('')}
+      </div>
+      <div style="display:flex;gap:.4rem;flex-wrap:wrap;margin-top:.28rem;">
+        ${Object.values(TYPES).map(t =>
+          `<span style="font-size:.64rem;font-weight:700;color:${t.c};
+                 background:${t.bg};padding:.08rem .38rem;border-radius:6px;">${t.lbl}</span>`
+        ).join('')}
+      </div>`;
+  } catch(e) {
+    document.getElementById('fp-modal-body').innerHTML =
+      '<p style="color:var(--red);font-size:.82rem;">Error loading data.</p>';
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  loadFreeCountBadges();
+  loadProxyMergeFreed();
+});
+
+// ── Build P1-P8 freed teacher table (same as merge_view) ──────────────────
+function buildP8Table(data) {
+  const byPeriod = {};
+  data.forEach(t => t.periods.forEach(p => { byPeriod[p] = t.name; }));
+  const ths = [1,2,3,4,5,6,7,8].map(p =>
+    `<th style="background:rgba(124,58,237,.18);color:#c4b5fd;font-size:.66rem;font-weight:700;padding:.26rem .3rem;border:1px solid rgba(124,58,237,.2);text-align:center;min-width:72px;">P${p}</th>`
+  ).join('');
+  const tds = [1,2,3,4,5,6,7,8].map(p => {
+    const n = byPeriod[p];
+    return n
+      ? `<td style="background:rgba(16,185,129,.09);color:#6ee7b7;font-weight:600;font-size:.67rem;padding:.28rem .3rem;border:1px solid rgba(16,185,129,.15);text-align:center;">${n}<br><span style="font-size:.56rem;opacity:.8;">↑ Proxy</span></td>`
+      : `<td style="color:rgba(255,255,255,.18);font-size:.72rem;padding:.28rem .3rem;border:1px solid rgba(255,255,255,.06);text-align:center;">—</td>`;
+  }).join('');
+  return `<table style="border-collapse:collapse;min-width:520px;width:100%;"><thead><tr>${ths}</tr></thead><tbody><tr>${tds}</tr></tbody></table>`;
+}
+
+// ── Load P1-P8 freed tables for each active merge in proxy page ───────────
+async function loadProxyMergeFreed() {
+  document.querySelectorAll('.proxy-merge-freed').forEach(async el => {
+    const gid = el.dataset.goingId;
+    if (!gid) return;
+    try {
+      const res  = await fetch(`/api/merge/freed_teachers?going_class_id=${gid}&date=${DATE_FOR_API}`);
+      const data = await res.json();
+      el.innerHTML = data.length
+        ? buildP8Table(data)
+        : '<span style="font-size:.7rem;color:var(--muted);">No teachers scheduled on this day</span>';
+    } catch(e) {
+      el.innerHTML = '<span style="font-size:.7rem;color:var(--red);">Error loading</span>';
+    }
+  });
+}
+</script>
+
+{% endblock %}

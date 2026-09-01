@@ -1,0 +1,512 @@
+{% extends 'base.html' %}
+{% block title %}Upload – KVS Proxy{% endblock %}
+{% block head %}
+<style>
+/* ── Timetable grid ─────────────────────────────────── */
+.tt-wrap { overflow-x:auto; border-radius:10px; }
+.tt-table {
+  border-collapse:collapse; font-size:.76rem;
+  white-space:nowrap; min-width:900px; width:100%;
+}
+.tt-table th {
+  background:rgba(79,142,247,.13); color:var(--accent);
+  font-weight:700; padding:.38rem .45rem;
+  border:1px solid rgba(79,142,247,.2); text-align:center;
+}
+.tt-table th.th-tchr {
+  background:rgba(124,58,237,.15); color:#c4b5fd;
+  min-width:80px; font-size:.85rem; padding:.5rem .6rem;
+  vertical-align:middle; text-align:center;
+}
+.tt-table th.th-day { min-width:54px; }
+.tt-table th.th-sub { font-weight:600; font-size:.68rem; color:rgba(147,197,253,.75); }
+
+/* Period pair headers */
+.tt-table th.th-period {
+  background:rgba(79,142,247,.18); font-size:.8rem;
+}
+
+/* Data cells */
+.tt-table td {
+  border:1px solid rgba(255,255,255,.05);
+  padding:.3rem .35rem; text-align:center;
+  vertical-align:middle;
+}
+.tt-table td.td-day {
+  font-weight:700; font-size:.78rem; color:var(--muted);
+  background:rgba(255,255,255,.03);
+  border-right:2px solid rgba(79,142,247,.2);
+}
+.tt-table td.td-tchr-name {
+  background:rgba(124,58,237,.08);
+  border-right:2px solid rgba(124,58,237,.25);
+  font-weight:700; font-size:.8rem; color:#c4b5fd;
+  vertical-align:middle; padding:.4rem .5rem;
+}
+.tt-table tr:hover td { background:rgba(79,142,247,.03); }
+.tt-table tr:hover td.td-day  { background:rgba(255,255,255,.05); }
+.tt-table tr:hover td.td-tchr-name { background:rgba(124,58,237,.12); }
+
+/* Editable cell */
+.cell-cls, .cell-sub {
+  width:46px; min-width:44px;
+  background:rgba(255,255,255,.05);
+  border:1px solid transparent;
+  color:var(--text); border-radius:4px;
+  padding:.18rem .25rem; font-size:.74rem;
+  text-align:center; outline:none;
+  transition:.15s;
+}
+.cell-cls { color:#93c5fd; font-weight:700; }
+.cell-sub { color:#fcd34d; }
+.cell-cls:focus, .cell-sub:focus {
+  border-color:var(--accent);
+  background:rgba(79,142,247,.12);
+}
+.cell-cls.free, .cell-sub.free { color:rgba(255,255,255,.2); }
+.cell-cls.dirty, .cell-sub.dirty {
+  border-color:rgba(245,158,11,.6);
+  background:rgba(245,158,11,.08);
+}
+.cell-cls.saving, .cell-sub.saving { opacity:.5; }
+.cell-cls.saved  { border-color:rgba(16,185,129,.5); background:rgba(16,185,129,.08); }
+
+/* Save all button */
+.tt-save-bar {
+  display:none; background:rgba(245,158,11,.08);
+  border:1px solid rgba(245,158,11,.25);
+  border-radius:9px; padding:.55rem .9rem;
+  margin-top:.6rem; align-items:center; gap:.75rem;
+}
+.tt-save-bar.show { display:flex; }
+
+/* Teacher picker card */
+.tt-picker {
+  display:flex; gap:.65rem; align-items:flex-end; flex-wrap:wrap;
+}
+.tt-picker select { min-width:200px; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<h1><i class="fa fa-upload" style="color:var(--accent)"></i> Master Timetable Upload</h1>
+
+<form id="reset-form" method="POST" action="/reset_timetable" style="display:none;"></form>
+
+<div class="grid-2 gap">
+  <div class="card">
+    <h2>📋 Upload Master_TT.xlsx</h2>
+    <p class="text-muted" style="font-size:.8rem;margin-bottom:.9rem;">
+      Class-wise format — rows: class labels (IA…VD), columns: Day × Period × TR/SUB pairs.
+      Upload once per session. System auto-detects teachers and classes.
+    </p>
+    <form method="POST" enctype="multipart/form-data" action="/upload">
+      <div class="form-group">
+        <label>Select file (.xlsx / .xls)</label>
+        <input type="file" name="mastertt_file" accept=".xlsx,.xls"
+               style="background:rgba(255,255,255,.06);border:1px solid var(--border);
+                      color:var(--text);padding:.5rem;border-radius:8px;width:100%;">
+      </div>
+      <button class="btn btn-primary" type="submit">
+        <i class="fa fa-cloud-arrow-up"></i> Upload
+      </button>
+    </form>
+    <div style="margin-top:.75rem;padding-top:.75rem;border-top:1px solid var(--border);">
+      <button class="btn btn-red btn-sm"
+              onclick="if(confirm('Delete ALL data and start fresh?')) document.getElementById('reset-form').submit()">
+        <i class="fa fa-trash"></i> Reset All Data
+      </button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>📊 Current Database</h2>
+    <div class="stats-row" style="grid-template-columns:repeat(3,1fr);margin-bottom:0;">
+      <div class="stat"><div class="num">{{ teachers|length }}</div><div class="lbl">Teachers</div></div>
+      <div class="stat"><div class="num">{{ class_count }}</div><div class="lbl">Classes</div></div>
+      <div class="stat"><div class="num">{{ tt_count }}</div><div class="lbl">TT Entries</div></div>
+    </div>
+    <p class="text-muted" style="font-size:.78rem;margin-top:.75rem;">
+      <i class="fa fa-circle-info"></i>
+      After upload, go to <a href="/proxy" style="color:var(--accent)">Proxy</a> to mark absences.
+    </p>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     TEACHER TIMETABLE VIEWER / EDITOR
+══════════════════════════════════════════════════════════════════════════ -->
+{% if teachers %}
+<div class="card" style="margin-top:.9rem;">
+  <h2 style="margin-bottom:.8rem;">
+    <i class="fa fa-table-cells" style="color:var(--accent)"></i>
+    Teacher Timetable — View &amp; Edit
+  </h2>
+
+  <!-- Picker -->
+  <div class="tt-picker" style="margin-bottom:.85rem;">
+    <div class="form-group" style="margin:0;flex:1;">
+      <label>Select Teacher</label>
+      <select id="tt-teacher-sel" onchange="loadTimetable()">
+        <option value="">— Choose a teacher —</option>
+        {% for t in teachers %}
+        <option value="{{ t.id }}">{{ t.display_name }} ({{ t.name }})</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button class="btn btn-ghost btn-sm" onclick="loadTimetable()" id="tt-refresh-btn"
+            style="display:none;" title="Reload from database">
+      <i class="fa fa-rotate-right"></i> Refresh
+    </button>
+  </div>
+
+  <!-- Timetable grid (hidden until teacher selected) -->
+  <div id="tt-container" style="display:none;">
+
+    <!-- Legend -->
+    <div style="display:flex;gap:1rem;font-size:.72rem;color:var(--muted);margin-bottom:.5rem;flex-wrap:wrap;">
+      <span><span style="color:#93c5fd;font-weight:700;">CLASS</span> = class label (e.g. IVC, IB)</span>
+      <span><span style="color:#fcd34d;">SUB</span> = subject code</span>
+      <span><span style="color:rgba(255,255,255,.25);">0</span> = free period</span>
+      <span style="color:rgba(245,158,11,.8);"><i class="fa fa-pen"></i> Click any cell to edit</span>
+    </div>
+
+    <div class="tt-wrap">
+    <table class="tt-table" id="tt-grid">
+      <thead>
+        <tr>
+          <th class="th-tchr" rowspan="2" id="tt-head-code">—</th>
+          <th class="th-day"  rowspan="2">Day</th>
+          <th class="th-period" colspan="2">P1</th>
+          <th class="th-period" colspan="2">P2</th>
+          <th class="th-period" colspan="2">P3</th>
+          <th class="th-period" colspan="2">P4</th>
+          <th class="th-period" colspan="2">P5</th>
+          <th class="th-period" colspan="2">P6</th>
+          <th class="th-period" colspan="2">P7</th>
+          <th class="th-period" colspan="2">P8</th>
+        </tr>
+        <tr>
+          {% for p in range(1,9) %}
+          <th class="th-sub">CLASS</th>
+          <th class="th-sub">SUB</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody id="tt-body">
+        <!-- filled by JS -->
+      </tbody>
+    </table>
+    </div>
+
+    <!-- Save bar -->
+    <div class="tt-save-bar" id="tt-save-bar">
+      <i class="fa fa-pen-to-square" style="color:var(--warn)"></i>
+      <span style="font-size:.82rem;color:var(--warn);font-weight:600;">
+        Unsaved changes detected
+      </span>
+      <button class="btn btn-primary btn-sm" onclick="saveAllChanges()">
+        <i class="fa fa-floppy-disk"></i> Save All Changes to Database
+      </button>
+      <button class="btn btn-ghost btn-sm" onclick="discardChanges()">
+        <i class="fa fa-xmark"></i> Discard
+      </button>
+      <span id="save-status" style="font-size:.76rem;color:#6ee7b7;display:none;">
+        ✓ All saved
+      </span>
+    </div>
+  </div>
+
+  <!-- Loading state -->
+  <div id="tt-loading" style="display:none;text-align:center;padding:1.5rem;color:var(--muted);font-size:.84rem;">
+    <i class="fa fa-spinner fa-spin"></i> Loading timetable…
+  </div>
+
+</div>
+{% endif %}
+
+<!-- Teacher table -->
+<div class="card" style="margin-top:.9rem;">
+  <div class="flex" style="margin-bottom:.75rem;">
+    <h2 style="margin:0"><i class="fa fa-list"></i> Teachers ({{ teachers|length }})</h2>
+    <span class="text-muted" style="font-size:.78rem;margin-left:auto;">Block = exclude from proxy suggestions</span>
+  </div>
+
+  {% if teachers %}
+  <div class="tbl-wrap">
+  <table>
+    <thead>
+      <tr><th>#</th><th>Code</th><th>Full Name</th><th>Max/Day</th><th>Status</th><th>Block</th></tr>
+    </thead>
+    <tbody>
+      {% for t in teachers %}
+      <tr>
+        <td class="text-muted">{{ loop.index }}</td>
+        <td><strong>{{ t.name }}</strong></td>
+        <td>{{ t.full_name or '—' }}</td>
+        <td>{{ t.max_daily_proxy }}</td>
+        <td>
+          {% if t.is_blocked %}
+            <span class="badge badge-absent">Blocked</span>
+          {% else %}
+            <span class="badge badge-confirmed">Active</span>
+          {% endif %}
+        </td>
+        <td>
+          <form method="POST" action="/teachers/toggle_block/{{ t.id }}" style="display:inline;">
+            <button class="btn btn-sm {% if t.is_blocked %}btn-green{% else %}btn-red{% endif %}">
+              {% if t.is_blocked %}Unblock{% else %}Block{% endif %}
+            </button>
+          </form>
+        </td>
+        <td>
+          <a href="/teacher_timetable/{{ t.id }}" class="btn btn-sm btn-ghost"
+             title="Edit {{ t.display_name }}'s timetable">
+            <i class="fa fa-calendar-pen"></i> Edit TT
+          </a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+    <p class="text-muted" style="font-size:.85rem;">No teachers yet. Upload Master_TT.xlsx to get started.</p>
+  {% endif %}
+</div>
+
+<script>
+const DAYS_SHORT = { Monday:'MON', Tuesday:'TUE', Wednesday:'WED',
+                     Thursday:'THU', Friday:'FRI', Saturday:'SAT' };
+const DAYS_ORDER = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+
+let currentTeacherId = null;
+let currentGrid      = null;   // original data from server
+let dirtyMap         = {};     // key "day|period|type" → new value
+let isFirstRow       = {};     // track which row shows teacher code cell
+
+async function loadTimetable(){
+  const sel = document.getElementById('tt-teacher-sel');
+  const tid = sel.value;
+  if(!tid){ return; }
+
+  currentTeacherId = tid;
+  dirtyMap = {};
+  document.getElementById('tt-save-bar').classList.remove('show');
+  document.getElementById('tt-container').style.display = 'none';
+  document.getElementById('tt-loading').style.display   = 'block';
+
+  try {
+    const res  = await fetch(`/api/timetable/${tid}`);
+    const data = await res.json();
+    currentGrid = data;
+    renderGrid(data);
+    document.getElementById('tt-loading').style.display   = 'none';
+    document.getElementById('tt-container').style.display = 'block';
+    document.getElementById('tt-refresh-btn').style.display = '';
+  } catch(e){
+    document.getElementById('tt-loading').innerHTML =
+      '<span style="color:var(--red)">Failed to load. Try again.</span>';
+  }
+}
+
+function renderGrid(data){
+  document.getElementById('tt-head-code').textContent = data.teacher_code;
+
+  const tbody = document.getElementById('tt-body');
+  tbody.innerHTML = '';
+
+  DAYS_ORDER.forEach((day, di) => {
+    const tr = document.createElement('tr');
+
+    // Teacher code cell — span all 6 days, show on first row
+    if(di === 0){
+      const tdName = document.createElement('td');
+      tdName.className  = 'td-tchr-name';
+      tdName.rowSpan    = DAYS_ORDER.length;
+      tdName.innerHTML  = `<div style="font-size:.9rem;">${data.teacher_code}</div>
+                           <div style="font-size:.65rem;color:var(--muted);margin-top:.18rem;
+                                       white-space:normal;max-width:70px;">${data.teacher_name}</div>`;
+      tr.appendChild(tdName);
+    }
+
+    // Day label
+    const tdDay = document.createElement('td');
+    tdDay.className   = 'td-day';
+    tdDay.textContent = DAYS_SHORT[day] || day.slice(0,3).toUpperCase();
+    tr.appendChild(tdDay);
+
+    // P1–P8
+    const dayData = data.grid[day] || {};
+    for(let p = 1; p <= 8; p++){
+      const slot  = dayData[p] || { class_label:'0', subject:'0' };
+      const isFree = !slot.class_label || slot.class_label === '0';
+
+      // CLASS input
+      const inpCls = document.createElement('input');
+      inpCls.type      = 'text';
+      inpCls.maxLength = 6;
+      inpCls.className = 'cell-cls' + (isFree ? ' free' : '');
+      inpCls.value     = isFree ? '0' : slot.class_label;
+      inpCls.dataset.day    = day;
+      inpCls.dataset.period = p;
+      inpCls.dataset.type   = 'cls';
+      inpCls.title = `${day} • Period ${p} • Class`;
+      setupCellListeners(inpCls);
+
+      // SUB input
+      const inpSub = document.createElement('input');
+      inpSub.type      = 'text';
+      inpSub.maxLength = 8;
+      inpSub.className = 'cell-sub' + (isFree ? ' free' : '');
+      inpSub.value     = (isFree || !slot.subject || slot.subject === '0') ? '0' : slot.subject;
+      inpSub.dataset.day    = day;
+      inpSub.dataset.period = p;
+      inpSub.dataset.type   = 'sub';
+      inpSub.title = `${day} • Period ${p} • Subject`;
+      setupCellListeners(inpSub);
+
+      const tdCls = document.createElement('td');
+      tdCls.appendChild(inpCls);
+      const tdSub = document.createElement('td');
+      tdSub.appendChild(inpSub);
+      tr.appendChild(tdCls);
+      tr.appendChild(tdSub);
+    }
+
+    tbody.appendChild(tr);
+  });
+}
+
+function setupCellListeners(inp){
+  inp.addEventListener('focus', function(){
+    if(this.value === '0') this.value = '';
+  });
+  inp.addEventListener('blur', function(){
+    if(this.value.trim() === '') this.value = '0';
+    markDirty(this);
+  });
+  inp.addEventListener('input', function(){
+    this.value = this.value.toUpperCase();
+    this.classList.remove('free');
+  });
+  inp.addEventListener('keydown', function(e){
+    if(e.key === 'Enter'){ this.blur(); }
+    if(e.key === 'Escape'){ this.value = getOriginalValue(this); this.blur(); }
+  });
+}
+
+function getOriginalValue(inp){
+  if(!currentGrid) return '0';
+  const day  = inp.dataset.day;
+  const p    = parseInt(inp.dataset.period);
+  const type = inp.dataset.type;
+  const slot = (currentGrid.grid[day] || {})[p] || {};
+  if(type === 'cls') return (!slot.class_label || slot.class_label==='0') ? '0' : slot.class_label;
+  return (!slot.subject || slot.subject==='0') ? '0' : slot.subject;
+}
+
+function markDirty(inp){
+  const orig = getOriginalValue(inp);
+  const key  = `${inp.dataset.day}|${inp.dataset.period}|${inp.dataset.type}`;
+  if(inp.value === orig){
+    delete dirtyMap[key];
+    inp.classList.remove('dirty');
+  } else {
+    dirtyMap[key] = inp.value;
+    inp.classList.add('dirty');
+  }
+  const hasDirty = Object.keys(dirtyMap).length > 0;
+  document.getElementById('tt-save-bar').classList.toggle('show', hasDirty);
+  document.getElementById('save-status').style.display = 'none';
+}
+
+async function saveAllChanges(){
+  if(!currentTeacherId || Object.keys(dirtyMap).length === 0) return;
+
+  // Group dirty cells by day+period
+  const slots = {};
+  for(const key of Object.keys(dirtyMap)){
+    const [day, period, type] = key.split('|');
+    const k = `${day}|${period}`;
+    slots[k] = slots[k] || { day, period_no: parseInt(period), class_label: null, subject: null };
+  }
+
+  // Fill in values (take from current inputs)
+  document.querySelectorAll('.cell-cls, .cell-sub').forEach(inp => {
+    const k   = `${inp.dataset.day}|${inp.dataset.period}`;
+    if(slots[k]){
+      if(inp.dataset.type === 'cls') slots[k].class_label = inp.value;
+      else                            slots[k].subject     = inp.value;
+    }
+  });
+
+  // For slots not in dirty but needed for context, fill from grid
+  for(const k of Object.keys(slots)){
+    const s   = slots[k];
+    if(s.class_label === null){
+      const slot = (currentGrid.grid[s.day]||{})[s.period_no]||{};
+      s.class_label = slot.class_label || '0';
+    }
+    if(s.subject === null){
+      const slot = (currentGrid.grid[s.day]||{})[s.period_no]||{};
+      s.subject = slot.subject || '0';
+    }
+  }
+
+  // Mark cells as saving
+  document.querySelectorAll('.dirty').forEach(el => {
+    el.classList.add('saving'); el.disabled = true;
+  });
+
+  let allOk = true;
+  const promises = Object.values(slots).map(async s => {
+    try {
+      const res = await fetch('/api/timetable/update', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+          teacher_id:  parseInt(currentTeacherId),
+          day:         s.day,
+          period_no:   s.period_no,
+          class_label: s.class_label,
+          subject:     s.subject,
+        })
+      });
+      const d = await res.json();
+      if(!d.success){ allOk = false; alert(`Error saving ${s.day} P${s.period_no}: ${d.error}`); }
+    } catch(e){ allOk = false; }
+  });
+
+  await Promise.all(promises);
+
+  // Re-enable cells
+  document.querySelectorAll('.saving').forEach(el => {
+    el.classList.remove('saving', 'dirty');
+    el.classList.add('saved');
+    el.disabled = false;
+    setTimeout(()=>el.classList.remove('saved'), 1800);
+  });
+
+  dirtyMap = {};
+  document.getElementById('tt-save-bar').classList.remove('show');
+  if(allOk){
+    const s = document.getElementById('save-status');
+    s.style.display = 'inline';
+    s.textContent = '✓ All changes saved to database';
+    document.getElementById('tt-save-bar').classList.add('show');
+    setTimeout(()=>document.getElementById('tt-save-bar').classList.remove('show'), 2500);
+  }
+
+  // Reload grid to sync
+  if(allOk) await loadTimetable();
+}
+
+function discardChanges(){
+  dirtyMap = {};
+  loadTimetable();
+}
+</script>
+
+{% endblock %}

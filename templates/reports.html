@@ -1,0 +1,499 @@
+{% extends 'base.html' %}
+{% block title %}Reports – KVS Proxy{% endblock %}
+{% block head %}
+<style>
+  .tab-bar { display:flex;gap:.3rem;background:rgba(255,255,255,.04);
+             padding:.35rem;border-radius:10px;width:fit-content;margin-bottom:1rem; }
+  .tab { padding:.38rem .9rem;border-radius:7px;cursor:pointer;font-size:.82rem;
+         color:var(--muted);border:none;background:transparent;font-weight:600;transition:.18s; }
+  .tab.active,.tab:hover { background:rgba(79,142,247,.18);color:var(--accent); }
+
+  /* Date-grid table for weekly/monthly */
+  .date-grid-wrap { overflow-x:auto; border-radius:10px; }
+  .date-grid {
+    border-collapse:collapse; font-size:.76rem; min-width:100%;
+    white-space:nowrap;
+  }
+  .date-grid th {
+    background:rgba(79,142,247,.12); color:var(--accent);
+    font-weight:700; padding:.38rem .5rem; border:1px solid var(--border);
+    text-align:center; position:sticky; top:0; z-index:2;
+  }
+  .date-grid th.tcol { min-width:150px; text-align:left; position:sticky; left:0; z-index:3;
+                        background:rgba(30,42,80,.98); }
+  .date-grid td {
+    padding:.32rem .45rem; border:1px solid rgba(255,255,255,.06);
+    text-align:center; vertical-align:middle;
+  }
+  .date-grid td.tcol {
+    text-align:left; font-weight:700; font-size:.79rem;
+    position:sticky; left:0; background:var(--card); z-index:1;
+    border-right:2px solid rgba(79,142,247,.25);
+  }
+  .date-grid td.total-col { font-weight:700; color:var(--accent);
+    border-left:2px solid rgba(79,142,247,.25); }
+  .date-grid td .cnt { display:inline-block; min-width:1.5rem;
+    background:rgba(16,185,129,.18); color:#6ee7b7;
+    border-radius:5px; padding:.06rem .3rem; font-weight:700; font-size:.75rem; }
+  .date-grid tr:hover td { background:rgba(79,142,247,.04); }
+  .date-grid tr:hover td.tcol { background:rgba(30,42,80,.98); }
+  .date-grid tfoot td { background:rgba(79,142,247,.08); font-weight:700;
+    color:var(--accent); border-top:2px solid rgba(79,142,247,.3); }
+  .date-grid tfoot td.tcol { background:rgba(30,42,80,.98); }
+
+  /* Class-wise proxy grid */
+  .cw-table { width:100%; border-collapse:collapse; min-width:700px; font-size:.78rem; }
+  .cw-table th {
+    background:rgba(79,142,247,.12); color:var(--accent);
+    font-weight:700; padding:.4rem .45rem; border:1px solid var(--border);
+    text-align:center;
+  }
+  .cw-table th.cw-cls { text-align:left; min-width:60px; }
+  .cw-table th.cw-ph { min-width:100px; }
+  .cw-cls-cell {
+    font-size:.82rem; font-weight:700; padding:.38rem .55rem;
+    border:1px solid var(--border); color:var(--accent);
+    background:rgba(79,142,247,.05); white-space:nowrap;
+  }
+  .cw-cell {
+    border:1px solid rgba(255,255,255,.05);
+    padding:.3rem .35rem; text-align:center;
+    vertical-align:middle; min-height:42px;
+  }
+  .cw-cell.cw-filled {
+    background:rgba(16,185,129,.05);
+    border:1px solid rgba(16,185,129,.15);
+  }
+  .cw-absent {
+    font-size:.66rem; color:var(--muted); margin-bottom:.1rem;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    text-decoration:line-through; opacity:.75;
+  }
+  .cw-proxy {
+    font-size:.75rem; font-weight:700; color:#6ee7b7;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .cw-st { font-size:.6rem; opacity:.7; display:inline-block; margin-top:.1rem; text-transform:uppercase; }
+  .cw-empty { color:rgba(255,255,255,.1); font-size:.8rem; }
+  .cw-table tr:hover td { background:rgba(79,142,247,.04); }
+  .cw-table tr:hover .cw-cls-cell { background:rgba(79,142,247,.08); }
+  .cw-table tfoot td {
+    background:rgba(79,142,247,.05);
+    border-top:2px solid rgba(79,142,247,.2);
+    border:1px solid var(--border);
+  }
+
+  /* Absent badge */
+  .abs-tag {
+    display:inline-block; background:rgba(239,68,68,.15); color:#fca5a5;
+    border:1px solid rgba(239,68,68,.3); border-radius:6px;
+    padding:.15rem .55rem; font-size:.77rem; font-weight:600; margin:.18rem;
+  }
+  .abs-tag .abs-reason { font-size:.68rem; opacity:.75; font-weight:400; }
+
+  @media print {
+    nav,.tab-bar,.no-print { display:none !important; }
+    body { background:#fff !important; color:#000 !important; }
+    .card { border:1px solid #ccc !important; background:#fff !important; }
+    th { background:#1e3a5f !important; color:#fff !important;
+         -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  }
+</style>
+{% endblock %}
+{% block content %}
+
+<div class="flex" style="justify-content:space-between;flex-wrap:wrap;margin-bottom:1rem;">
+  <h1 style="margin:0"><i class="fa fa-chart-bar" style="color:var(--accent)"></i> Reports</h1>
+  <div class="flex no-print">
+    {% if tab != 'custom' %}
+    <input type="date" id="pick-date" value="{{ date_str }}"
+           onchange="location.href='/reports?tab={{ tab }}&date='+this.value"
+           style="width:auto;padding:.38rem .65rem;font-size:.82rem;"/>
+    {% else %}
+    <input type="date" id="pick-date" value="{{ date_str }}" style="display:none;"/>
+    {% endif %}
+    <button class="btn btn-ghost btn-sm" onclick="window.print()"><i class="fa fa-print"></i> Print</button>
+    {% if tab != 'custom' %}
+    <a id="export-btn" href="/export/excel?tab={{ tab }}&date={{ date_str }}" class="btn btn-warn btn-sm no-print">
+      <i class="fa fa-file-excel"></i> Export Excel
+    </a>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Tab bar -->
+<div class="tab-bar no-print">
+  <button class="tab {% if tab=='daily' %}active{% endif %}" onclick="switchTab('daily')">
+    <i class="fa fa-calendar-day"></i> Daily
+  </button>
+  <button class="tab {% if tab=='custom' %}active{% endif %}" onclick="switchTab('custom')">
+    <i class="fa fa-calendar-range"></i> Custom Range
+  </button>
+  <button class="tab {% if tab=='monthly' %}active{% endif %}" onclick="switchTab('monthly')">
+    <i class="fa fa-calendar"></i> Monthly
+  </button>
+  <button class="tab {% if tab=='teachers' %}active{% endif %}" onclick="switchTab('teachers')">
+    <i class="fa fa-chalkboard-user"></i> Teacher Load
+  </button>
+  <button class="tab {% if tab=='merges' %}active{% endif %}" onclick="switchTab('merges')">
+    <i class="fa fa-object-group"></i> Merges
+  </button>
+</div>
+
+<!-- ═══ DAILY ════════════════════════════════════════════════════════════ -->
+{% if tab == 'daily' %}
+<div class="stats-row gap">
+  <div class="stat"><div class="num">{{ daily.absences|length }}</div><div class="lbl">Absent</div></div>
+  <div class="stat"><div class="num text-green">{{ daily.confirmed_count }}</div><div class="lbl">Proxies Done</div></div>
+  <div class="stat"><div class="num text-warn">{{ daily.pending_count }}</div><div class="lbl">Pending</div></div>
+  <div class="stat"><div class="num">{{ daily.merge_count }}</div><div class="lbl">Merges</div></div>
+</div>
+
+<!-- Absent teachers block -->
+<div class="card gap">
+  <h2 style="margin-bottom:.6rem;">
+    <i class="fa fa-user-slash" style="color:var(--red)"></i>
+    Absent on {{ ref_date.strftime('%d %b %Y') }}
+    <span style="font-size:.76rem;font-weight:400;color:var(--muted);">({{ daily.absences|length }} teacher{{ 's' if daily.absences|length != 1 }})</span>
+  </h2>
+  {% if daily.absences %}
+    {% for ab in daily.absences %}
+    <span class="abs-tag">
+      {{ ab.teacher.display_name }}
+      {% if ab.reason %}<span class="abs-reason"> · {{ ab.reason }}</span>{% endif %}
+    </span>
+    {% endfor %}
+  {% else %}
+    <p class="text-muted" style="font-size:.84rem;"><i class="fa fa-circle-check" style="color:var(--green)"></i> No absences — all teachers present.</p>
+  {% endif %}
+</div>
+
+<!-- Class-wise proxy grid -->
+<div class="card">
+  <h2><i class="fa fa-list-check" style="color:var(--green)"></i>
+    Class-wise Proxy Log — {{ ref_date.strftime('%d %b %Y') }}
+  </h2>
+  {% if daily.proxies %}
+  <div class="tbl-wrap">
+  <table class="cw-table">
+    <thead>
+      <tr>
+        <th class="cw-cls">Class</th>
+        <th class="cw-ph">P1</th><th class="cw-ph">P2</th><th class="cw-ph">P3</th>
+        <th class="cw-ph">P4</th><th class="cw-ph">P5</th><th class="cw-ph">P6</th>
+        <th class="cw-ph">P7</th><th class="cw-ph">P8</th>
+      </tr>
+    </thead>
+    <tbody>
+    {%- set seen_classes = [] -%}
+    {%- for p in daily.proxies -%}
+      {%- if p.class_ and p.class_.label not in seen_classes -%}
+        {%- if seen_classes.append(p.class_.label) -%}{%- endif -%}
+      {%- endif -%}
+    {%- endfor -%}
+    {% for clabel in seen_classes | sort %}
+    <tr>
+      <td class="cw-cls-cell"><strong>{{ clabel }}</strong></td>
+      {% for pn in range(1, 9) %}
+        {%- set found = namespace(p=None) -%}
+        {%- for px in daily.proxies -%}
+          {%- if px.class_ and px.class_.label == clabel and px.period_no == pn -%}
+            {%- set found.p = px -%}
+          {%- endif -%}
+        {%- endfor -%}
+      <td class="cw-cell{% if found.p %} cw-filled{% endif %}">
+        {% if found.p %}
+          <div class="cw-absent">{{ found.p.original_teacher.display_name if found.p.original_teacher else '' }}</div>
+          <div class="cw-proxy">
+            {%- if found.p.proxy_teacher -%}
+              {{ found.p.proxy_teacher.display_name }}
+            {%- else -%}
+              <span style="color:var(--red);font-size:.65rem;">Pending</span>
+            {%- endif -%}
+          </div>
+          <div class="cw-st badge-{{ found.p.status }}">{{ found.p.status }}</div>
+        {% else %}<span class="cw-empty">·</span>{% endif %}
+      </td>
+      {% endfor %}
+    </tr>
+    {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr>
+        <td class="cw-cls-cell" style="font-weight:700;font-size:.74rem;color:var(--muted);">Total</td>
+        <td colspan="8" style="padding:.42rem .6rem;font-size:.78rem;">
+          <span class="badge badge-confirmed">✓ {{ daily.confirmed_count }} Confirmed</span>&nbsp;
+          <span class="badge badge-pending">⏳ {{ daily.pending_count }} Pending</span>
+          {% if daily.merge_count %}&nbsp;<span class="badge badge-merge">⇌ {{ daily.merge_count }} Merge</span>{% endif %}
+        </td>
+      </tr>
+    </tfoot>
+  </table>
+  </div>
+  {% else %}
+    <p class="text-muted" style="font-size:.84rem;">No proxy records for {{ ref_date.strftime('%d %b %Y') }}.</p>
+  {% endif %}
+</div>
+
+<!-- ═══ CUSTOM DATE RANGE ════════════════════════════════════════════════ -->
+{% elif tab == 'custom' %}
+
+<!-- From - To picker bar -->
+<div class="card no-print" style="padding:.7rem 1rem;margin-bottom:.8rem;">
+  <div style="display:flex;align-items:center;gap:.8rem;flex-wrap:wrap;">
+    <span style="font-size:.82rem;font-weight:600;color:var(--muted);">
+      <i class="fa fa-calendar-range" style="color:var(--accent)"></i> Date Range
+    </span>
+    <label style="font-size:.8rem;color:var(--muted);">From</label>
+    <input type="date" id="from-date" value="{{ from_str }}"
+           style="padding:.35rem .6rem;font-size:.81rem;background:rgba(255,255,255,.07);
+                  border:1px solid var(--border);color:var(--text);border-radius:7px;"/>
+    <label style="font-size:.8rem;color:var(--muted);">To</label>
+    <input type="date" id="to-date" value="{{ to_str }}"
+           style="padding:.35rem .6rem;font-size:.81rem;background:rgba(255,255,255,.07);
+                  border:1px solid var(--border);color:var(--text);border-radius:7px;"/>
+    <button class="btn btn-primary btn-sm" onclick="applyCustomRange()">
+      <i class="fa fa-magnifying-glass"></i> Show Report
+    </button>
+    <a id="custom-export-btn"
+       href="/export/excel?tab=custom&from_date={{ from_str }}&to_date={{ to_str }}"
+       class="btn btn-warn btn-sm">
+      <i class="fa fa-file-excel"></i> Export Excel
+    </a>
+  </div>
+</div>
+
+<p class="text-muted" style="font-size:.83rem;margin-bottom:.9rem;">
+  <strong>{{ custom.from_date.strftime('%d/%m/%Y') }}</strong>
+  &nbsp;→&nbsp;
+  <strong>{{ custom.to_date.strftime('%d/%m/%Y') }}</strong>
+  &nbsp;·&nbsp; Total confirmed proxies: <strong>{{ custom.total }}</strong>
+</p>
+
+<div class="card gap">
+  <h2>
+    <i class="fa fa-calendar-range" style="color:var(--accent)"></i>
+    Proxy Count per Teacher
+    <span style="font-weight:400;font-size:.78rem;color:var(--muted);">
+      {{ custom.from_date.strftime('%d/%m/%Y') }} – {{ custom.to_date.strftime('%d/%m/%Y') }}
+    </span>
+  </h2>
+  {% if custom.rows %}
+  <div class="date-grid-wrap">
+  <table class="date-grid">
+    <thead>
+      <tr>
+        <th class="tcol">#&nbsp;&nbsp;Teacher</th>
+        {% for d in custom.dates %}
+        <th title="{{ d.strftime('%A, %d %b %Y') }}">
+          {{ d.strftime('%d/%m') }}<br>
+          <span style="font-weight:400;font-size:.62rem;opacity:.75;">{{ d.strftime('%a') }}</span>
+        </th>
+        {% endfor %}
+        <th>Total</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for row in custom.rows %}
+    <tr>
+      <td class="tcol">
+        <span style="color:var(--muted);font-size:.7rem;margin-right:.4rem;">{{ loop.index }}</span>
+        {{ row.teacher.display_name }}
+      </td>
+      {% for d in custom.dates %}
+      {% set cnt = row.daily_counts.get(d, 0) %}
+      <td>{% if cnt > 0 %}<span class="cnt">{{ cnt }}</span>{% else %}<span style="color:rgba(255,255,255,.12);">·</span>{% endif %}</td>
+      {% endfor %}
+      <td class="total-col">{% if row.total > 0 %}{{ row.total }}{% else %}<span style="color:rgba(255,255,255,.18);">0</span>{% endif %}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr>
+        <td class="tcol">Day Total</td>
+        {% for d in custom.dates %}
+        <td>
+          {% set ns = namespace(dt=0) %}
+          {% for row in custom.rows %}{% set ns.dt = ns.dt + row.daily_counts.get(d, 0) %}{% endfor %}
+          {% if ns.dt > 0 %}<strong>{{ ns.dt }}</strong>{% else %}<span style="opacity:.3;">0</span>{% endif %}
+        </td>
+        {% endfor %}
+        <td class="total-col">{{ custom.total }}</td>
+      </tr>
+    </tfoot>
+  </table>
+  </div>
+  {% else %}
+    <p class="text-muted" style="font-size:.84rem;">No proxy data for selected range.</p>
+  {% endif %}
+</div>
+
+<!-- ═══ MONTHLY ══════════════════════════════════════════════════════════ -->
+{% elif tab == 'monthly' %}
+<form id="delete-month-form"
+      method="POST"
+      action="/proxy/delete_month/{{ monthly.month_start.year }}/{{ monthly.month_start.month }}"
+      style="display:none;"></form>
+
+<div class="flex" style="justify-content:space-between;flex-wrap:wrap;gap:.5rem;margin-bottom:.9rem;">
+  <p class="text-muted" style="font-size:.83rem;margin:0;">
+    {{ monthly.month_start.strftime('01/%m/%Y') }}
+    &nbsp;→&nbsp;
+    {{ monthly.month_end.strftime('%d/%m/%Y') }}
+    &nbsp;·&nbsp; Total confirmed proxies: <strong>{{ monthly.total }}</strong>
+  </p>
+  <button type="button" class="btn btn-sm no-print"
+          style="background:rgba(239,68,68,.18);color:#fca5a5;border:1px solid rgba(239,68,68,.35);"
+          onclick="if(confirm('Delete ALL proxy records for {{ monthly.month_start.strftime('%B %Y') }}?\n\nThis will permanently remove {{ monthly.total }} confirmed proxy record(s) (and any pending ones) for this month. This cannot be undone.'))
+                     document.getElementById('delete-month-form').submit();">
+    <i class="fa fa-trash"></i> Delete This Month's Data
+  </button>
+</div>
+
+<div class="card gap">
+  <h2><i class="fa fa-calendar" style="color:var(--accent)"></i> Proxy Count per Teacher — Date-wise ({{ monthly.month_start.strftime('%B %Y') }})</h2>
+  {% if monthly.rows %}
+  <div class="date-grid-wrap">
+  <table class="date-grid">
+    <thead>
+      <tr>
+        <th class="tcol">#&nbsp;&nbsp;Teacher</th>
+        {% for d in monthly.dates %}
+        <th title="{{ d.strftime('%A, %d %b') }}">
+          {{ d.strftime('%d') }}<br>
+          <span style="font-weight:400;font-size:.62rem;opacity:.7;">{{ d.strftime('%a') }}</span>
+        </th>
+        {% endfor %}
+        <th>Total</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for row in monthly.rows %}
+    <tr>
+      <td class="tcol">
+        <span style="color:var(--muted);font-size:.7rem;margin-right:.4rem;">{{ loop.index }}</span>
+        {{ row.teacher.display_name }}
+      </td>
+      {% for d in monthly.dates %}
+      {% set cnt = row.daily_counts.get(d, 0) %}
+      <td>{% if cnt > 0 %}<span class="cnt">{{ cnt }}</span>{% else %}<span style="color:rgba(255,255,255,.1);">·</span>{% endif %}</td>
+      {% endfor %}
+      <td class="total-col">{% if row.total > 0 %}{{ row.total }}{% else %}<span style="color:rgba(255,255,255,.18);">0</span>{% endif %}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr>
+        <td class="tcol">Day Total</td>
+        {% for d in monthly.dates %}
+        <td>
+          {% set ns = namespace(dt=0) %}
+          {% for row in monthly.rows %}{% set ns.dt = ns.dt + row.daily_counts.get(d, 0) %}{% endfor %}
+          {% if ns.dt > 0 %}<strong>{{ ns.dt }}</strong>{% else %}<span style="opacity:.3;">0</span>{% endif %}
+        </td>
+        {% endfor %}
+        <td class="total-col">{{ monthly.total }}</td>
+      </tr>
+    </tfoot>
+  </table>
+  </div>
+  {% else %}
+    <p class="text-muted" style="font-size:.84rem;">No data this month.</p>
+  {% endif %}
+</div>
+
+<!-- ═══ TEACHER LOAD ══════════════════════════════════════════════════════ -->
+{% elif tab == 'teachers' %}
+<div class="card">
+  <h2>Teacher-wise Proxy Load (All Time)</h2>
+  {% if teacher_load %}
+  <div class="tbl-wrap">
+  <table>
+    <thead>
+      <tr><th>#</th><th>Teacher</th><th>Total</th><th>This Week</th><th>This Month</th><th>Last Proxy</th></tr>
+    </thead>
+    <tbody>
+    {% for row in teacher_load %}
+    <tr>
+      <td class="text-muted">{{ loop.index }}</td>
+      <td><strong>{{ row.teacher.display_name }}</strong><br>
+          <span class="text-muted" style="font-size:.74rem;">{{ row.teacher.name }}</span></td>
+      <td>{{ row.total }}</td>
+      <td>{{ row.weekly }}</td>
+      <td>{{ row.monthly }}</td>
+      <td class="text-muted">{{ row.last_date.strftime('%d %b %Y') if row.last_date else '—' }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+    <p class="text-muted" style="font-size:.84rem;">No data yet.</p>
+  {% endif %}
+</div>
+
+<!-- ═══ MERGES ════════════════════════════════════════════════════════════ -->
+{% elif tab == 'merges' %}
+<div class="card">
+  <h2>Class Merge History</h2>
+  {% if merges %}
+  <div class="tbl-wrap">
+  <table>
+    <thead><tr><th>Date</th><th>Going Class</th><th>Host Class</th><th>Note</th></tr></thead>
+    <tbody>
+    {% for m in (merges or []) %}
+    <tr>
+      <td>{{ m.date.strftime('%d %b %Y') }}</td>
+      <td><strong style="color:#fca5a5;">{{ m.going_class.label if m.going_class else '—' }}</strong></td>
+      <td><strong style="color:#6ee7b7;">{{ m.host_class.label if m.host_class else '—' }}</strong></td>
+      <td class="text-muted" style="font-size:.78rem;">{{ m.note or '—' }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+    <p class="text-muted" style="font-size:.84rem;">No merge records yet.</p>
+  {% endif %}
+</div>
+{% endif %}
+
+<script>
+function switchTab(t){
+  const d = document.getElementById('pick-date').value;
+  if(t === 'custom'){
+    location.href = '/reports?tab=custom&from_date=' + d + '&to_date=' + d;
+  } else {
+    location.href = '/reports?tab=' + t + '&date=' + d;
+  }
+}
+function applyCustomRange(){
+  const f = document.getElementById('from-date').value;
+  const t = document.getElementById('to-date').value;
+  if(!f || !t){ alert('Please select both From and To dates.'); return; }
+  if(t < f){ alert('To date must be on or after From date.'); return; }
+  location.href = '/reports?tab=custom&from_date=' + f + '&to_date=' + t;
+}
+// Update custom export link dynamically
+const fromEl = document.getElementById('from-date');
+const toEl   = document.getElementById('to-date');
+if(fromEl && toEl){
+  function syncExport(){
+    const expBtn = document.getElementById('custom-export-btn');
+    if(expBtn) expBtn.href = '/export/excel?tab=custom&from_date=' + fromEl.value + '&to_date=' + toEl.value;
+  }
+  fromEl.addEventListener('change', syncExport);
+  toEl.addEventListener('change', syncExport);
+}
+// Sync top export button with current tab+date
+const pickDate = document.getElementById('pick-date');
+if(pickDate){
+  pickDate.addEventListener('change', function(){
+    const tab = new URLSearchParams(location.search).get('tab') || 'daily';
+    const expBtn = document.getElementById('export-btn');
+    if(expBtn && tab !== 'custom')
+      expBtn.href = '/export/excel?tab=' + tab + '&date=' + this.value;
+  });
+}
+</script>
+{% endblock %}

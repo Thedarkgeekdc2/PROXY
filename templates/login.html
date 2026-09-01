@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Login — KVS Proxy System</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+  <style>
+    :root {
+      --bg:#0b1120;--card:rgba(255,255,255,.06);--border:rgba(255,255,255,.1);
+      --accent:#4f8ef7;--violet:#7c3aed;--text:#e2e8f0;--muted:#94a3b8;
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    body{background:var(--bg);color:var(--text);font-family:'Segoe UI',sans-serif;
+      min-height:100vh;display:flex;align-items:center;justify-content:center;padding:1rem}
+    body::before{content:'';position:fixed;inset:0;z-index:0;
+      background:radial-gradient(ellipse 60% 50% at 20% 20%,rgba(79,142,247,.12) 0%,transparent 70%),
+                 radial-gradient(ellipse 50% 40% at 80% 80%,rgba(124,58,237,.10) 0%,transparent 70%);
+      pointer-events:none}
+    .wrap{position:relative;z-index:1;width:100%;max-width:400px}
+    .hdr{text-align:center;margin-bottom:1.8rem}
+    .logo{width:58px;height:58px;border-radius:15px;
+      background:linear-gradient(135deg,#1e40af,#7c3aed);
+      display:flex;align-items:center;justify-content:center;margin:0 auto .9rem;
+      box-shadow:0 8px 28px rgba(79,142,247,.3)}
+    .logo i{color:#fff;font-size:1.5rem}
+    .ttl{font-size:1.35rem;font-weight:700;
+      background:linear-gradient(90deg,#4f8ef7,#a78bfa);
+      -webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:.25rem}
+    .sub{font-size:.79rem;color:var(--muted)}
+    .card{background:var(--card);border:1px solid var(--border);
+      border-radius:15px;padding:1.8rem;backdrop-filter:blur(12px)}
+    .flashes{list-style:none;margin-bottom:1rem}
+    .flashes li{padding:.45rem .85rem;border-radius:7px;margin-bottom:.25rem;font-size:.81rem}
+    .flashes li.success{background:rgba(16,185,129,.13);border:1px solid rgba(16,185,129,.3);color:#6ee7b7}
+    .flashes li.error,.flashes li.danger{background:rgba(239,68,68,.13);border:1px solid rgba(239,68,68,.3);color:#fca5a5}
+    .flashes li.info{background:rgba(79,142,247,.13);border:1px solid rgba(79,142,247,.3);color:#93c5fd}
+    .fg{margin-bottom:1rem}
+    .fg label{display:block;font-size:.72rem;color:var(--muted);margin-bottom:.3rem;
+      font-weight:500;text-transform:uppercase;letter-spacing:.04em}
+    .iw{position:relative}
+    .iw i.px{position:absolute;left:.7rem;top:50%;transform:translateY(-50%);
+      color:var(--muted);font-size:.78rem;pointer-events:none}
+    .iw input{width:100%;background:rgba(255,255,255,.06);border:1px solid var(--border);
+      color:var(--text);padding:.52rem .72rem .52rem 2.1rem;
+      border-radius:8px;font-size:.86rem;outline:none;transition:.15s}
+    .iw input:focus{border-color:var(--accent);background:rgba(79,142,247,.07)}
+    .iw input::placeholder{color:rgba(148,163,184,.45)}
+    .tpw{position:absolute;right:.7rem;top:50%;transform:translateY(-50%);
+      color:var(--muted);cursor:pointer;font-size:.78rem;background:none;border:none;transition:color .15s}
+    .tpw:hover{color:var(--text)}
+    .btn-login{width:100%;padding:.62rem 1rem;
+      background:linear-gradient(135deg,var(--accent),var(--violet));
+      border:none;border-radius:8px;color:#fff;font-size:.9rem;font-weight:700;
+      cursor:pointer;transition:opacity .15s,transform .1s;
+      display:flex;align-items:center;justify-content:center;gap:.45rem;margin-top:1.3rem}
+    .btn-login:hover{opacity:.88;transform:translateY(-1px)}
+    .btn-login:active{transform:translateY(0)}
+    .ft{text-align:center;margin-top:1.3rem;font-size:.72rem;color:var(--muted)}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hdr">
+    <div class="logo"><i class="fa-solid fa-school"></i></div>
+    <div class="ttl">KVS Proxy System</div>
+    <div class="sub">Kendriya Vidyalaya — Staff Portal</div>
+  </div>
+  <div class="card">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <ul class="flashes">
+          {% for cat, msg in messages %}<li class="{{ cat }}">{{ msg }}</li>{% endfor %}
+        </ul>
+      {% endif %}
+    {% endwith %}
+    <form method="POST" action="{{ url_for('auth.login') }}">
+      <div class="fg">
+        <label>User ID</label>
+        <div class="iw">
+          <i class="fa fa-user px"></i>
+          <input type="text" name="username" placeholder="Enter your ID"
+                 value="{{ request.form.get('username','') }}" autocomplete="username" required/>
+        </div>
+      </div>
+      <div class="fg">
+        <label>Password</label>
+        <div class="iw">
+          <i class="fa fa-key px"></i>
+          <input type="password" id="pw" name="password"
+                 placeholder="Enter your password" autocomplete="current-password" required/>
+          <button type="button" class="tpw" onclick="t()"><i class="fa fa-eye" id="ei"></i></button>
+        </div>
+      </div>
+      <button type="submit" class="btn-login">
+        <i class="fa fa-right-to-bracket"></i> Sign In
+      </button>
+    </form>
+  </div>
+  <div class="ft"><i class="fa fa-shield-halved"></i> Authorised access only</div>
+</div>
+<script>
+  function t(){var i=document.getElementById('pw'),e=document.getElementById('ei');
+    i.type=i.type==='password'?'text':'password';
+    e.className=i.type==='text'?'fa fa-eye-slash':'fa fa-eye'}
+</script>
+</body>
+</html>

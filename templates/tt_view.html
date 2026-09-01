@@ -1,0 +1,393 @@
+{% extends 'base.html' %}
+{% block title %}View Time Table – KVS Proxy{% endblock %}
+{% block head %}
+<style>
+  .tab-bar { display:flex;gap:.3rem;background:rgba(255,255,255,.04);
+             padding:.35rem;border-radius:10px;width:fit-content;margin-bottom:1rem;
+             flex-wrap:wrap; }
+  .tab { padding:.38rem .9rem;border-radius:7px;cursor:pointer;font-size:.82rem;
+         color:var(--muted);border:none;background:transparent;font-weight:600;transition:.18s; }
+  .tab.active,.tab:hover { background:rgba(79,142,247,.18);color:var(--accent); }
+
+  .vtt-panel { display:none; }
+  .vtt-panel.active { display:block; }
+
+  .vtt-table { width:100%; border-collapse:collapse; min-width:760px; font-size:.78rem; }
+  .vtt-table th {
+    background:rgba(79,142,247,.12); color:var(--accent);
+    font-weight:700; padding:.4rem .45rem; border:1px solid var(--border);
+    text-align:center; min-width:78px;
+  }
+  .vtt-table th.vtt-day { text-align:left; min-width:64px; }
+  .vtt-table td {
+    border:1px solid rgba(255,255,255,.06); padding:.35rem .4rem;
+    text-align:center; vertical-align:middle;
+  }
+  .vtt-table td.vtt-day-cell {
+    text-align:left; font-weight:700; color:var(--accent);
+    background:rgba(79,142,247,.05); white-space:nowrap;
+  }
+  .vtt-subj { font-weight:700; font-size:.79rem; }
+  .vtt-teacher { font-size:.68rem; color:var(--muted); margin-top:.1rem; }
+  .vtt-empty-cell { color:rgba(255,255,255,.15); }
+  .vtt-free { color:#6ee7b7; font-weight:700; background:rgba(16,185,129,.08); }
+  .vtt-busy { color:rgba(255,255,255,.35); font-weight:600; }
+  .vtt-table tr:hover td { background:rgba(79,142,247,.04); }
+  .vtt-table tr:hover td.vtt-day-cell { background:rgba(79,142,247,.09); }
+
+  .vtt-chip {
+    display:inline-block; background:rgba(79,142,247,.12); color:var(--accent);
+    border:1px solid rgba(79,142,247,.25); border-radius:6px;
+    padding:.14rem .55rem; font-size:.73rem; font-weight:600; margin:.12rem;
+    white-space:nowrap;
+  }
+  .vtt-chip-free { background:rgba(16,185,129,.12); color:#6ee7b7; border-color:rgba(16,185,129,.25); }
+
+  .vtt-period-card {
+    border:1px solid var(--border); border-radius:10px;
+    padding:.6rem .7rem; margin-bottom:.6rem; background:rgba(255,255,255,.02);
+  }
+  .vtt-period-hdr {
+    font-weight:700; color:var(--accent); font-size:.82rem;
+    margin-bottom:.45rem; display:flex; align-items:center; gap:.4rem;
+  }
+
+  .vtt-summary-bar {
+    display:flex; gap:.8rem; flex-wrap:wrap; align-items:center;
+    background:rgba(79,142,247,.07); border:1px solid rgba(79,142,247,.2);
+    border-radius:10px; padding:.7rem .9rem; margin-top:.8rem;
+  }
+
+  @media (max-width:700px) {
+    .vtt-table { font-size:.7rem; }
+    .vtt-table th, .vtt-table td { padding:.28rem .3rem; min-width:56px; }
+  }
+</style>
+{% endblock %}
+{% block content %}
+
+<h1><i class="fa fa-table-list" style="color:var(--accent)"></i> View Time Table</h1>
+<p class="text-muted" style="font-size:.82rem;margin-top:-.6rem;margin-bottom:1rem;">
+  View only — Class-wise, Period-wise and Teacher-wise timetable views. Nothing here can be edited.
+</p>
+
+<div class="tab-bar no-print">
+  <button class="tab active" id="tab-btn-class-week" onclick="switchViewTab('class-week', this)">
+    <i class="fa fa-calendar-week"></i> Class-wise Full Week
+  </button>
+  <button class="tab" id="tab-btn-period-day" onclick="switchViewTab('period-day', this)">
+    <i class="fa fa-calendar-day"></i> Period-wise Per Day
+  </button>
+  <button class="tab" id="tab-btn-teacher-week" onclick="switchViewTab('teacher-week', this)">
+    <i class="fa fa-chalkboard-user"></i> Teacher-wise Full Week
+  </button>
+  <button class="tab" id="tab-btn-free-week" onclick="switchViewTab('free-week', this)">
+    <i class="fa fa-mug-hot"></i> Free Period Full Week
+  </button>
+</div>
+
+<!-- ═══ 1. CLASS-WISE FULL WEEK ═══════════════════════════════════════ -->
+<div class="vtt-panel active" id="panel-class-week">
+  <div class="card">
+    <div style="max-width:320px;">
+      <label>Select Class</label>
+      <select id="cw-class-sel" onchange="loadClassWeek()">
+        <option value="">— Select a class —</option>
+        {% for cls in all_classes %}
+        <option value="{{ cls.id }}">{{ cls.label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div id="cw-result" class="tbl-wrap" style="margin-top:.9rem;display:none;"></div>
+    <div id="cw-empty" class="text-muted" style="margin-top:.9rem;font-size:.83rem;display:none;">
+      No timetable data available.
+    </div>
+  </div>
+</div>
+
+<!-- ═══ 2. PERIOD-WISE PER DAY  (+ 2.1 FREE TEACHERS) ═════════════════ -->
+<div class="vtt-panel" id="panel-period-day">
+  <div class="card">
+    <div style="max-width:220px;">
+      <label>Select Date</label>
+      <input type="date" id="pd-date-sel" value="{{ today_str }}" onchange="loadPeriodDay()"/>
+    </div>
+    <div id="pd-daylabel" class="text-muted" style="font-size:.8rem;margin-top:.6rem;"></div>
+  </div>
+
+  <div class="card" style="margin-top:.85rem;">
+    <h2><i class="fa fa-users" style="color:var(--accent)"></i> Occupied Teachers — Per Period</h2>
+    <div id="pd-occupied"></div>
+    <div id="pd-occ-empty" class="text-muted" style="font-size:.83rem;display:none;">
+      No timetable data available.
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:.85rem;">
+    <h2><i class="fa fa-user-check" style="color:var(--green)"></i> All Teachers Free — Per Period</h2>
+    <div id="pd-free"></div>
+    <div id="pd-free-empty" class="text-muted" style="font-size:.83rem;display:none;">
+      No timetable data available.
+    </div>
+  </div>
+</div>
+
+<!-- ═══ 3. TEACHER-WISE FULL WEEK ═════════════════════════════════════ -->
+<div class="vtt-panel" id="panel-teacher-week">
+  <div class="card">
+    <div style="max-width:320px;">
+      <label>Select Teacher</label>
+      <select id="tw-teacher-sel" onchange="loadTeacherWeek()">
+        <option value="">— Select a teacher —</option>
+        {% for t in all_teachers %}
+        <option value="{{ t.id }}">{{ t.display_name }} ({{ t.name }})</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div id="tw-result" class="tbl-wrap" style="margin-top:.9rem;display:none;"></div>
+    <div id="tw-empty" class="text-muted" style="margin-top:.9rem;font-size:.83rem;display:none;">
+      No timetable data available.
+    </div>
+  </div>
+</div>
+
+<!-- ═══ 4. FREE PERIOD — FULL WEEK TEACHER-WISE ═══════════════════════ -->
+<div class="vtt-panel" id="panel-free-week">
+  <div class="card">
+    <div style="max-width:320px;">
+      <label>Select Teacher</label>
+      <select id="fw-teacher-sel" onchange="loadFreeWeek()">
+        <option value="">— Select a teacher —</option>
+        {% for t in all_teachers %}
+        <option value="{{ t.id }}">{{ t.display_name }} ({{ t.name }})</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div id="fw-summary" class="vtt-summary-bar" style="display:none;"></div>
+    <div id="fw-result" class="tbl-wrap" style="margin-top:.9rem;display:none;"></div>
+    <div id="fw-empty" class="text-muted" style="margin-top:.9rem;font-size:.83rem;display:none;">
+      No timetable data available.
+    </div>
+  </div>
+</div>
+
+<script>
+function switchViewTab(name, btn){
+  document.querySelectorAll('.vtt-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('panel-' + name).classList.add('active');
+  document.querySelectorAll('.tab-bar .tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  if (name === 'class-week')   loadClassWeek();
+  if (name === 'period-day')   loadPeriodDay();
+  if (name === 'teacher-week') loadTeacherWeek();
+  if (name === 'free-week')    loadFreeWeek();
+}
+
+function esc(s){
+  return (s == null ? '' : String(s)).replace(/[&<>"']/g, c => (
+    {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]
+  ));
+}
+
+function dayShort(d){ return (d || '').slice(0, 3); }
+
+// ── 1. Class-wise Full Week ─────────────────────────────────────────
+async function loadClassWeek(){
+  const sel    = document.getElementById('cw-class-sel');
+  const result = document.getElementById('cw-result');
+  const empty  = document.getElementById('cw-empty');
+  if (!sel.value) { result.style.display = 'none'; empty.style.display = 'none'; return; }
+
+  result.style.display = 'block'; empty.style.display = 'none';
+  result.innerHTML = '<p class="text-muted" style="font-size:.82rem;">Loading…</p>';
+  try {
+    const res  = await fetch('/api/tt_view/class_week?class_id=' + sel.value);
+    const data = await res.json();
+    if (data.error || !data.has_data) {
+      result.style.display = 'none'; empty.style.display = 'block';
+      empty.textContent = data.error || 'No timetable data available.';
+      return;
+    }
+    let html = `<div class="text-muted" style="font-size:.8rem;margin-bottom:.5rem;">
+                  Class ${esc(data.class_label)} — Weekly Timetable</div>`;
+    html += '<table class="vtt-table"><thead><tr><th class="vtt-day">Day</th>';
+    data.periods.forEach(p => html += `<th>P${p}</th>`);
+    html += '</tr></thead><tbody>';
+    data.days.forEach(day => {
+      html += `<tr><td class="vtt-day-cell">${dayShort(day)}</td>`;
+      data.periods.forEach(p => {
+        const cell = data.grid[day][p];
+        html += cell
+          ? `<td><div class="vtt-subj">${esc(cell.subject)}</div><div class="vtt-teacher">${esc(cell.teacher)}</div></td>`
+          : `<td class="vtt-empty-cell">—</td>`;
+      });
+      html += '</tr>';
+    });
+    html += '</tbody></table>';
+    result.innerHTML = html;
+  } catch(e) {
+    result.style.display = 'none'; empty.style.display = 'block';
+    empty.textContent = 'Error loading timetable.';
+  }
+}
+
+// ── 2. Period-wise Per Day (+ 2.1 Free Teachers) ─────────────────────
+async function loadPeriodDay(){
+  const dateVal   = document.getElementById('pd-date-sel').value;
+  const dayLabel  = document.getElementById('pd-daylabel');
+  const occDiv    = document.getElementById('pd-occupied');
+  const occEmpty  = document.getElementById('pd-occ-empty');
+  const freeDiv   = document.getElementById('pd-free');
+  const freeEmpty = document.getElementById('pd-free-empty');
+  if (!dateVal) return;
+
+  dayLabel.textContent = 'Loading…';
+  occDiv.innerHTML = ''; freeDiv.innerHTML = '';
+  occEmpty.style.display = 'none'; freeEmpty.style.display = 'none';
+
+  try {
+    const res  = await fetch('/api/tt_view/period_day?date=' + dateVal);
+    const data = await res.json();
+
+    if (!data.is_working_day) {
+      dayLabel.innerHTML = `<strong style="color:var(--warn);">${esc(data.day)}</strong> is not a working day (school works Monday – Saturday).`;
+      occDiv.style.display = 'none'; occEmpty.style.display = 'block'; occEmpty.textContent = 'No timetable data available.';
+      freeDiv.style.display = 'none'; freeEmpty.style.display = 'block'; freeEmpty.textContent = 'No timetable data available.';
+      return;
+    }
+
+    dayLabel.innerHTML = `Showing schedule for <strong style="color:var(--accent);">${esc(data.day)}</strong> &nbsp;(${esc(data.date)})`;
+
+    if (!data.has_data) {
+      occDiv.style.display = 'none'; occEmpty.style.display = 'block';
+      freeDiv.style.display = 'none'; freeEmpty.style.display = 'block';
+      return;
+    }
+    occDiv.style.display = 'block'; freeDiv.style.display = 'block';
+
+    let occHtml = '', freeHtml = '';
+    data.periods && Object.keys(data.periods).length;
+    for (let p = 1; p <= 8; p++) {
+      const pd = data.periods[p];
+
+      occHtml += `<div class="vtt-period-card"><div class="vtt-period-hdr"><i class="fa fa-clock"></i> Period ${p}</div>`;
+      occHtml += pd.occupied.length
+        ? pd.occupied.map(o => `<span class="vtt-chip">${esc(o.teacher)} – ${esc(o.class)}</span>`).join('')
+        : `<span class="text-muted" style="font-size:.78rem;">No classes scheduled.</span>`;
+      occHtml += '</div>';
+
+      freeHtml += `<div class="vtt-period-card"><div class="vtt-period-hdr"><i class="fa fa-clock"></i> Period ${p}
+                    <span class="text-muted" style="font-weight:400;font-size:.72rem;">(${pd.free.length} of ${data.total_teachers} free)</span></div>`;
+      freeHtml += pd.free.length
+        ? pd.free.map(n => `<span class="vtt-chip vtt-chip-free">${esc(n)}</span>`).join('')
+        : `<span class="text-muted" style="font-size:.78rem;">No teachers free.</span>`;
+      freeHtml += '</div>';
+    }
+    occDiv.innerHTML = occHtml;
+    freeDiv.innerHTML = freeHtml;
+  } catch(e) {
+    dayLabel.textContent = 'Error loading.';
+  }
+}
+
+// ── 3. Teacher-wise Full Week ─────────────────────────────────────────
+async function loadTeacherWeek(){
+  const sel    = document.getElementById('tw-teacher-sel');
+  const result = document.getElementById('tw-result');
+  const empty  = document.getElementById('tw-empty');
+  if (!sel.value) { result.style.display = 'none'; empty.style.display = 'none'; return; }
+
+  result.style.display = 'block'; empty.style.display = 'none';
+  result.innerHTML = '<p class="text-muted" style="font-size:.82rem;">Loading…</p>';
+  try {
+    const res  = await fetch('/api/tt_view/teacher_week?teacher_id=' + sel.value);
+    const data = await res.json();
+    if (data.error || !data.has_data) {
+      result.style.display = 'none'; empty.style.display = 'block';
+      empty.textContent = data.error || 'No timetable data available.';
+      return;
+    }
+    let html = `<div class="text-muted" style="font-size:.8rem;margin-bottom:.5rem;">
+                  ${esc(data.teacher_name)} (${esc(data.teacher_code)}) — Weekly Timetable</div>`;
+    html += '<table class="vtt-table"><thead><tr><th class="vtt-day">Day</th>';
+    data.periods.forEach(p => html += `<th>P${p}</th>`);
+    html += '</tr></thead><tbody>';
+    data.days.forEach(day => {
+      html += `<tr><td class="vtt-day-cell">${dayShort(day)}</td>`;
+      data.periods.forEach(p => {
+        const cell = data.grid[day][p];
+        html += cell
+          ? `<td><div class="vtt-subj">${esc(cell.class_label)}</div><div class="vtt-teacher">${esc(cell.subject)}</div></td>`
+          : `<td class="vtt-free">Free</td>`;
+      });
+      html += '</tr>';
+    });
+    html += '</tbody></table>';
+    result.innerHTML = html;
+  } catch(e) {
+    result.style.display = 'none'; empty.style.display = 'block';
+    empty.textContent = 'Error loading timetable.';
+  }
+}
+
+// ── 4. Free Period — Full Week Teacher-wise ────────────────────────────
+async function loadFreeWeek(){
+  const sel     = document.getElementById('fw-teacher-sel');
+  const summary = document.getElementById('fw-summary');
+  const result  = document.getElementById('fw-result');
+  const empty   = document.getElementById('fw-empty');
+  if (!sel.value) {
+    summary.style.display = 'none'; result.style.display = 'none'; empty.style.display = 'none';
+    return;
+  }
+
+  summary.style.display = 'none'; empty.style.display = 'none';
+  result.style.display = 'block';
+  result.innerHTML = '<p class="text-muted" style="font-size:.82rem;">Loading…</p>';
+  try {
+    const res  = await fetch('/api/tt_view/teacher_free_week?teacher_id=' + sel.value);
+    const data = await res.json();
+    if (data.error || !data.has_data) {
+      result.style.display = 'none'; empty.style.display = 'block';
+      empty.textContent = data.error || 'No timetable data available.';
+      return;
+    }
+
+    summary.style.display = 'flex';
+    summary.innerHTML = `
+      <div style="font-weight:700;color:var(--accent);font-size:.9rem;">
+        <i class="fa fa-chalkboard-user"></i> ${esc(data.teacher_name)} (${esc(data.teacher_code)})
+      </div>
+      <div style="margin-left:auto;display:flex;gap:1.4rem;">
+        <div style="text-align:center;">
+          <div class="text-muted" style="font-size:.7rem;">Total Periods</div>
+          <div style="font-size:1.15rem;font-weight:700;">${data.total_periods}</div>
+        </div>
+        <div style="text-align:center;">
+          <div class="text-muted" style="font-size:.7rem;">Free Periods</div>
+          <div style="font-size:1.15rem;font-weight:700;color:#6ee7b7;">${data.free_periods}</div>
+        </div>
+      </div>`;
+
+    let html = '<table class="vtt-table"><thead><tr><th class="vtt-day">Day</th>';
+    data.periods.forEach(p => html += `<th>P${p}</th>`);
+    html += '</tr></thead><tbody>';
+    data.days.forEach(day => {
+      html += `<tr><td class="vtt-day-cell">${dayShort(day)}</td>`;
+      data.periods.forEach(p => {
+        const state = data.grid[day][p];
+        html += state === 'free'
+          ? `<td class="vtt-free">Free</td>`
+          : `<td class="vtt-busy">X</td>`;
+      });
+      html += '</tr>';
+    });
+    html += '</tbody></table>';
+    result.innerHTML = html;
+  } catch(e) {
+    result.style.display = 'none'; empty.style.display = 'block';
+    empty.textContent = 'Error loading timetable.';
+  }
+}
+</script>
+{% endblock %}

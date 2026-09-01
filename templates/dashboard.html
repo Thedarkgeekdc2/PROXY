@@ -1,0 +1,314 @@
+{% extends 'base.html' %}
+{% block title %}Home – KVS Proxy{% endblock %}
+{% block head %}
+<style>
+/* Teacher Modal */
+.modal-overlay {
+  display:none; position:fixed; inset:0; z-index:1000;
+  background:rgba(0,0,0,.65); backdrop-filter:blur(3px);
+  align-items:center; justify-content:center;
+}
+.modal-overlay.open { display:flex; }
+.modal-box {
+  background:var(--card); border:1px solid var(--border);
+  border-radius:14px; width:min(96vw,700px); max-height:82vh;
+  display:flex; flex-direction:column; overflow:hidden;
+  box-shadow:0 24px 60px rgba(0,0,0,.5);
+}
+.modal-head {
+  padding:.9rem 1.2rem; border-bottom:1px solid var(--border);
+  display:flex; align-items:center; justify-content:space-between;
+}
+.modal-body { overflow-y:auto; padding:.6rem 1rem 1rem; flex:1; }
+.teacher-row {
+  display:grid; grid-template-columns:2rem 1fr 1fr auto;
+  gap:.5rem; align-items:center;
+  padding:.42rem .35rem; border-bottom:1px solid rgba(255,255,255,.04);
+  font-size:.82rem;
+}
+.teacher-row:hover { background:rgba(79,142,247,.06); border-radius:6px; }
+.teacher-row .t-hdr { font-weight:700; color:var(--muted); font-size:.72rem; }
+.tr-code { font-weight:700; color:var(--accent); }
+.tr-full { color:var(--text); }
+.edit-input {
+  background:rgba(255,255,255,.08); border:1px solid var(--border);
+  color:var(--text); border-radius:6px; padding:.28rem .5rem;
+  font-size:.8rem; width:100%; display:none;
+}
+.edit-input.show { display:block; }
+.tr-full-text { cursor:pointer; }
+.tr-full-text:hover { color:var(--accent); }
+.btn-save-name {
+  display:none; padding:.26rem .65rem; font-size:.74rem;
+  border-radius:6px; background:var(--accent); color:#fff;
+  border:none; cursor:pointer; white-space:nowrap;
+}
+.btn-save-name.show { display:inline-block; }
+.save-status { font-size:.7rem; color:#6ee7b7; display:none; }
+.save-status.show { display:inline; }
+</style>
+{% endblock %}
+{% block content %}
+
+{# ── View Time Table entry point — below nav, above Class wise TT ─────── #}
+<a href="/view-timetable" class="btn btn-primary" style="width:100%;justify-content:center;
+   padding:.7rem 1rem;font-size:.92rem;margin-bottom:1rem;">
+  <i class="fa fa-table-cells-large"></i> View Time Table
+</a>
+
+{# ── Class wise TT (with date picker) — moved into content block; ────────
+   was previously (incorrectly) sitting in {% block head %}, which caused
+   browsers to auto-relocate it and produce an inconsistent gap below it. #}
+<h1><i class="fa fa-magnifying-glass" style="color:var(--accent)"></i> Class wise TT</h1>
+<div class="card" style="margin-bottom:.85rem;">
+  <div style="display:flex;gap:.6rem;flex-wrap:wrap;align-items:flex-end;margin-bottom:.8rem;">
+    <div style="flex:1;min-width:140px;">
+      <label style="display:block;font-size:.76rem;color:var(--muted);margin-bottom:.28rem;">Select Class</label>
+      <select id="tt-class-sel" onchange="searchTimetable()"
+              style="width:100%;background:rgba(255,255,255,.06);border:1px solid var(--border);
+                     color:var(--text);padding:.45rem .7rem;border-radius:7px;font-size:.84rem;outline:none;">
+        <option value="">— Select a class —</option>
+        {% for cls in all_classes %}
+        <option value="{{ cls.id }}">{{ cls.label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div style="flex:0;min-width:150px;">
+      <label style="display:block;font-size:.76rem;color:var(--muted);margin-bottom:.28rem;">Date</label>
+      <input type="date" id="tt-date-sel" value="{{ summary.today.strftime('%Y-%m-%d') }}"
+             onchange="searchTimetable()"
+             style="width:100%;background:rgba(255,255,255,.06);border:1px solid var(--border);
+                    color:var(--text);padding:.44rem .7rem;border-radius:7px;font-size:.84rem;outline:none;"/>
+    </div>
+  </div>
+  <div id="tt-result" style="display:none;overflow-x:auto;-webkit-overflow-scrolling:touch;"></div>
+  <div id="tt-empty" style="display:none;color:var(--muted);font-size:.83rem;padding:.5rem 0;">
+    No timetable data found for this class on this date.
+  </div>
+</div>
+
+<script>
+async function searchTimetable() {
+  const classId = document.getElementById('tt-class-sel').value;
+  const dateVal = document.getElementById('tt-date-sel').value;
+  const result  = document.getElementById('tt-result');
+  const empty   = document.getElementById('tt-empty');
+  if (!classId || !dateVal) { result.style.display='none'; empty.style.display='none'; return; }
+  try {
+    const res  = await fetch('/api/class_timetable?class_id=' + classId + '&date=' + dateVal);
+    const data = await res.json();
+    if (!data.periods || !data.periods.some(p => p.teacher)) {
+      result.style.display = 'none'; empty.style.display = 'block'; return;
+    }
+    const dayLabel = data.day ? `<div style="font-size:.74rem;color:var(--muted);margin-bottom:.4rem;">
+        ${data.class_label} — ${data.day}</div>` : '';
+    const ths = data.periods.map(p =>
+      `<th style="background:rgba(79,142,247,.12);color:var(--accent);font-size:.72rem;font-weight:700;
+            padding:.35rem .4rem;border:1px solid rgba(79,142,247,.2);text-align:center;min-width:80px;">
+        P${p.period}</th>`).join('');
+    const tds = data.periods.map(p => {
+      if (!p.teacher) return `<td style="color:rgba(255,255,255,.18);font-size:.74rem;padding:.38rem .4rem;border:1px solid rgba(255,255,255,.06);text-align:center;">—</td>`;
+      const bg    = p.is_proxy ? 'rgba(245,158,11,.08)' : 'rgba(16,185,129,.07)';
+      const color = p.is_proxy ? '#fcd34d' : '#6ee7b7';
+      const tag   = p.is_proxy ? '<br><span style="font-size:.58rem;opacity:.85;">proxy</span>' : '';
+      return `<td style="background:${bg};color:${color};font-weight:600;font-size:.74rem;
+                    padding:.38rem .4rem;border:1px solid rgba(255,255,255,.07);text-align:center;">
+                ${p.teacher}${tag}</td>`;
+    }).join('');
+    result.innerHTML = dayLabel + `<table style="border-collapse:collapse;min-width:640px;width:100%;">
+      <thead><tr>${ths}</tr></thead>
+      <tbody><tr>${tds}</tr></tbody></table>`;
+    result.style.display = 'block'; empty.style.display = 'none';
+  } catch(e) { empty.innerHTML='Error loading.'; empty.style.display='block'; result.style.display='none'; }
+}
+</script>
+
+<h1 style="margin-top:.4rem;"><i class="fa fa-gauge-high" style="color:var(--accent)"></i> Today's Overview</h1>
+
+<div class="stats-row">
+  <div class="stat" id="stat-teachers" style="cursor:pointer;" onclick="openTeacherModal()"
+       title="Click to manage teachers">
+    <div class="num">{{ summary.total_teachers }}</div>
+    <div class="lbl">Teachers <i class="fa fa-pen-to-square" style="font-size:.65rem;opacity:.5;"></i></div>
+  </div>
+  <div class="stat"><div class="num">{{ summary.total_classes }}</div><div class="lbl">Classes</div></div>
+  <div class="stat"><div class="num">{{ summary.total_tt_entries }}</div><div class="lbl">TT Entries</div></div>
+  <div class="stat"><div class="num">{{ summary.daily.absences|length }}</div><div class="lbl">Absent Today</div></div>
+  <div class="stat">
+    <div class="num {% if summary.daily.confirmed_count > 0 %}text-green{% endif %}">{{ summary.daily.confirmed_count }}</div>
+    <div class="lbl">Proxies Done</div>
+  </div>
+  <div class="stat">
+    <div class="num {% if summary.daily.pending_count > 0 %}text-warn{% endif %}">{{ summary.daily.pending_count }}</div>
+    <div class="lbl">Unresolved</div>
+  </div>
+</div>
+
+<!-- ── Teacher Edit Modal ──────────────────────────────── -->
+<div class="modal-overlay" id="teacherModal" onclick="if(event.target===this)closeTeacherModal()">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h2 style="margin:0;font-size:1rem;"><i class="fa fa-chalkboard-user" style="color:var(--accent)"></i>
+        All Teachers — Edit Full Name</h2>
+      <button class="btn btn-sm btn-ghost" onclick="closeTeacherModal()" style="padding:.3rem .7rem;">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="teacher-row" style="border-bottom:2px solid var(--border);margin-bottom:.3rem;">
+        <span class="t-hdr">#</span>
+        <span class="t-hdr">Code</span>
+        <span class="t-hdr">Full Name <span style="font-weight:400;">(click to edit)</span></span>
+        <span class="t-hdr"></span>
+      </div>
+      <div id="teacher-list-body">
+        <p class="text-muted" style="text-align:center;padding:1rem;">Loading...</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="grid-2 gap">
+  <div class="card">
+    <h2><i class="fa fa-bolt" style="color:var(--warn)"></i> Quick Actions</h2>
+    <div style="display:flex;flex-direction:column;gap:.5rem;">
+      <a href="/proxy" class="btn btn-primary"><i class="fa fa-user-slash"></i> Mark Absent & Generate Proxy</a>
+      <a href="/upload" class="btn btn-ghost"><i class="fa fa-upload"></i> Upload / Manage Timetable</a>
+      <a href="/reports" class="btn btn-ghost"><i class="fa fa-chart-bar"></i> View Reports</a>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2><i class="fa fa-user-slash" style="color:var(--red)"></i> Absent Today
+      <span class="text-muted" style="font-size:.76rem;font-weight:400;">({{ summary.today.strftime('%d %b %Y') }})</span>
+    </h2>
+    {% if summary.daily.absences %}
+      {% for ab in summary.daily.absences %}
+      <div class="flex" style="margin-bottom:.4rem;">
+        <span class="badge badge-absent">{{ ab.teacher.display_name }}</span>
+        <a href="/proxy?date={{ ab.absent_date }}"
+           class="btn btn-sm btn-ghost" style="margin-left:auto;"><i class="fa fa-eye"></i> Proxy</a>
+      </div>
+      {% endfor %}
+    {% else %}
+      <p class="text-muted" style="font-size:.84rem;">No absences today.</p>
+    {% endif %}
+  </div>
+</div>
+
+{% if summary.daily.proxies %}
+<div class="card">
+  <h2><i class="fa fa-list-check" style="color:var(--green)"></i> Today's Proxy Log</h2>
+  <div class="tbl-wrap">
+  <table>
+    <thead><tr><th>Period</th><th>Class</th><th>Absent</th><th>Proxy</th><th>Status</th></tr></thead>
+    <tbody>
+    {% for p in summary.daily.proxies %}
+    <tr>
+      <td><strong>P{{ p.period_no }}</strong></td>
+      <td>{{ p.class_.label if p.class_ else '—' }}</td>
+      <td class="text-muted">{{ p.original_teacher.display_name if p.original_teacher else '—' }}</td>
+      <td>{% if p.proxy_teacher %}<span class="text-green">{{ p.proxy_teacher.display_name }}</span>
+          {% else %}—{% endif %}</td>
+      <td><span class="badge badge-{{ p.status }}">{{ p.status }}</span></td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% endif %}
+
+{% if summary.top_proxy_teachers %}
+<div class="card">
+  <h2><i class="fa fa-ranking-star" style="color:var(--warn)"></i> Most Used Proxy Teachers (All Time)</h2>
+  {% set max_c = summary.top_proxy_teachers[0].total_proxy_count or 1 %}
+  {% for load in summary.top_proxy_teachers %}
+  <div style="display:flex;align-items:center;gap:.7rem;margin:.35rem 0;">
+    <span style="min-width:130px;font-size:.82rem;">{{ load.teacher.display_name }}</span>
+    <div style="flex:1;height:7px;background:rgba(255,255,255,.07);border-radius:4px;">
+      <div style="width:{{ ((load.total_proxy_count or 0)/max_c*100)|int }}%;height:7px;border-radius:4px;
+           background:linear-gradient(90deg,#4f8ef7,#a78bfa);"></div>
+    </div>
+    <span class="text-muted" style="font-size:.78rem;min-width:20px;text-align:right;">{{ load.total_proxy_count }}</span>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<script>
+function openTeacherModal(){
+  document.getElementById('teacherModal').classList.add('open');
+  loadTeachers();
+}
+function closeTeacherModal(){
+  document.getElementById('teacherModal').classList.remove('open');
+}
+
+async function loadTeachers(){
+  const body = document.getElementById('teacher-list-body');
+  body.innerHTML = '<p class="text-muted" style="text-align:center;padding:1rem;">Loading...</p>';
+  try {
+    const res  = await fetch('/api/teachers');
+    const list = await res.json();
+    if(!list.length){ body.innerHTML='<p class="text-muted">No teachers found.</p>'; return; }
+    body.innerHTML = list.map((t, i) => `
+      <div class="teacher-row" id="tr-${t.id}">
+        <span class="text-muted" style="font-size:.74rem;">${i+1}</span>
+        <span class="tr-code">${t.name}</span>
+        <span>
+          <span class="tr-full-text" id="txt-${t.id}" onclick="startEdit(${t.id})"
+                title="Click to edit full name">${t.full_name || '<span style=\'color:var(--muted);font-style:italic;font-size:.76rem;\'>Click to add full name</span>'}</span>
+          <input class="edit-input" id="inp-${t.id}" value="${t.full_name || ''}"
+                 placeholder="Enter full name…"
+                 onkeydown="if(event.key==='Enter')saveName(${t.id});if(event.key==='Escape')cancelEdit(${t.id})"/>
+        </span>
+        <span>
+          <button class="btn-save-name" id="savebtn-${t.id}" onclick="saveName(${t.id})">
+            <i class="fa fa-check"></i> Save
+          </button>
+          <span class="save-status" id="status-${t.id}">✓ Saved</span>
+        </span>
+      </div>`).join('');
+  } catch(e){
+    body.innerHTML='<p style="color:var(--red)">Failed to load teachers.</p>';
+  }
+}
+
+function startEdit(id){
+  document.getElementById('txt-'+id).style.display    = 'none';
+  document.getElementById('inp-'+id).classList.add('show');
+  document.getElementById('savebtn-'+id).classList.add('show');
+  document.getElementById('inp-'+id).focus();
+  document.getElementById('inp-'+id).select();
+}
+
+function cancelEdit(id){
+  document.getElementById('txt-'+id).style.display    = '';
+  document.getElementById('inp-'+id).classList.remove('show');
+  document.getElementById('savebtn-'+id).classList.remove('show');
+}
+
+async function saveName(id){
+  const inp   = document.getElementById('inp-'+id);
+  const val   = inp.value.trim();
+  const stEl  = document.getElementById('status-'+id);
+  try {
+    const res  = await fetch(`/api/teachers/${id}/update`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({full_name: val})
+    });
+    const data = await res.json();
+    if(data.success){
+      // Update display text
+      const txtEl = document.getElementById('txt-'+id);
+      txtEl.innerHTML = data.full_name || '<span style=\'color:var(--muted);font-style:italic;font-size:.76rem;\'>Click to add full name</span>';
+      txtEl.style.display = '';
+      document.getElementById('inp-'+id).classList.remove('show');
+      document.getElementById('savebtn-'+id).classList.remove('show');
+      stEl.classList.add('show');
+      setTimeout(()=>stEl.classList.remove('show'), 2000);
+    }
+  } catch(e){ alert('Save failed. Try again.'); }
+}
+</script>
+{% endblock %}
