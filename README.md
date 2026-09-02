@@ -122,8 +122,8 @@ termux-setup-storage
 ### 3️⃣ Clone this repository
 
 ```bash
-git clone https://github.com/<your-username>/kvs-proxy-system.git
-cd kvs-proxy-system
+git clone and https://github.com/Thedarkgeekdc2/PROXY.git
+cd PROXY
 ```
 
 ### 4️⃣ Install dependencies
@@ -194,8 +194,8 @@ Head to the login page and follow the on-screen setup to create your Timetable-I
 Works exactly the same way, minus the `pkg install` step:
 
 ```bash
-git clone https://github.com/<your-username>/kvs-proxy-system.git
-cd kvs-proxy-system
+git clone and https://github.com/Thedarkgeekdc2/PROXY.git
+cd PROXY
 python -m venv venv && source venv/bin/activate      # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 python app.py
